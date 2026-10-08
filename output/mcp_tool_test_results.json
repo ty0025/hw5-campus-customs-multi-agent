@@ -1,0 +1,276 @@
+{
+  "checked_at": "2026-10-08T08:34:11+08:00",
+  "server_registration": "campus_customs_mcp",
+  "configuration": {
+    "command": "python",
+    "args": [
+      "-m",
+      "mcp_server.server"
+    ],
+    "env": {
+      "PYTHONPATH": "."
+    }
+  },
+  "configured_python_resolution": "C:\\Users\\david\\AppData\\Local\\Microsoft\\WindowsApps\\python.EXE",
+  "working_directory": "C:\\Users\\david\\Desktop\\Courses\\my-app\\hw5",
+  "transport": "stdio",
+  "verification_method": "Independent read-only SQL compared with real MCP subprocess responses",
+  "cases": [
+    {
+      "name": "ticket_101_inventory",
+      "tool": "check_inventory_stock",
+      "arguments": {
+        "sku": "CC-TEE-WHITE",
+        "size": "S",
+        "order_quantity": 1
+      },
+      "expected": {
+        "sku": "CC-TEE-WHITE",
+        "size": "S",
+        "product_name": "Classic Bulldog Tee",
+        "location": "Aisle B",
+        "order_quantity": 1,
+        "on_hand": 0,
+        "shortfall": 1,
+        "can_fulfill": false
+      },
+      "actual": {
+        "sku": "CC-TEE-WHITE",
+        "size": "S",
+        "product_name": "Classic Bulldog Tee",
+        "location": "Aisle B",
+        "order_quantity": 1,
+        "on_hand": 0,
+        "shortfall": 1,
+        "can_fulfill": false
+      },
+      "matches_database": true
+    },
+    {
+      "name": "ticket_103_inventory",
+      "tool": "check_inventory_stock",
+      "arguments": {
+        "sku": "CC-HOOD-NAVY",
+        "size": "M",
+        "order_quantity": 20
+      },
+      "expected": {
+        "sku": "CC-HOOD-NAVY",
+        "size": "M",
+        "product_name": "Basic Hoodie Big Yale",
+        "location": "Aisle A",
+        "order_quantity": 20,
+        "on_hand": 8,
+        "shortfall": 12,
+        "can_fulfill": false
+      },
+      "actual": {
+        "sku": "CC-HOOD-NAVY",
+        "size": "M",
+        "product_name": "Basic Hoodie Big Yale",
+        "location": "Aisle A",
+        "order_quantity": 20,
+        "on_hand": 8,
+        "shortfall": 12,
+        "can_fulfill": false
+      },
+      "matches_database": true
+    },
+    {
+      "name": "vendor_1_clearance",
+      "tool": "check_vendor_restock_eligibility",
+      "arguments": {
+        "vendor_id": 1
+      },
+      "expected": {
+        "vendor_id": 1,
+        "vendor_name": "Bulldog Print Co",
+        "specialty": "apparel reprint",
+        "lead_days": 5,
+        "shop_date": "2026-08-31",
+        "unpaid_invoices": [
+          {
+            "invoice_id": 501,
+            "amount": 840.0,
+            "due_date": "2026-08-28",
+            "status": "open",
+            "description": "Rush reprint CC-TEE-WHITE S",
+            "overdue": true,
+            "days_overdue": 3
+          }
+        ],
+        "total_unpaid": 840.0,
+        "blocked_by_unpaid_invoices": true
+      },
+      "actual": {
+        "vendor_id": 1,
+        "vendor_name": "Bulldog Print Co",
+        "specialty": "apparel reprint",
+        "lead_days": 5,
+        "shop_date": "2026-08-31",
+        "unpaid_invoices": [
+          {
+            "invoice_id": 501,
+            "amount": 840.0,
+            "due_date": "2026-08-28",
+            "status": "open",
+            "description": "Rush reprint CC-TEE-WHITE S",
+            "overdue": true,
+            "days_overdue": 3
+          }
+        ],
+        "total_unpaid": 840.0,
+        "blocked_by_unpaid_invoices": true
+      },
+      "matches_database": true
+    },
+    {
+      "name": "vendor_2_clearance",
+      "tool": "check_vendor_restock_eligibility",
+      "arguments": {
+        "vendor_id": 2
+      },
+      "expected": {
+        "vendor_id": 2,
+        "vendor_name": "Elm City Gifts",
+        "specialty": "mugs and small goods",
+        "lead_days": 3,
+        "shop_date": "2026-08-31",
+        "unpaid_invoices": [],
+        "total_unpaid": 0,
+        "blocked_by_unpaid_invoices": false
+      },
+      "actual": {
+        "vendor_id": 2,
+        "vendor_name": "Elm City Gifts",
+        "specialty": "mugs and small goods",
+        "lead_days": 3,
+        "shop_date": "2026-08-31",
+        "unpaid_invoices": [],
+        "total_unpaid": 0.0,
+        "blocked_by_unpaid_invoices": false
+      },
+      "matches_database": true
+    },
+    {
+      "name": "vendor_3_clearance",
+      "tool": "check_vendor_restock_eligibility",
+      "arguments": {
+        "vendor_id": 3
+      },
+      "expected": {
+        "vendor_id": 3,
+        "vendor_name": "QuickShip CT",
+        "specialty": "local courier",
+        "lead_days": 1,
+        "shop_date": "2026-08-31",
+        "unpaid_invoices": [],
+        "total_unpaid": 0,
+        "blocked_by_unpaid_invoices": false
+      },
+      "actual": {
+        "vendor_id": 3,
+        "vendor_name": "QuickShip CT",
+        "specialty": "local courier",
+        "lead_days": 1,
+        "shop_date": "2026-08-31",
+        "unpaid_invoices": [],
+        "total_unpaid": 0.0,
+        "blocked_by_unpaid_invoices": false
+      },
+      "matches_database": true
+    },
+    {
+      "name": "lease_1_due",
+      "tool": "get_lease_due_status",
+      "arguments": {
+        "lease_id": 1
+      },
+      "expected": {
+        "lease_id": 1,
+        "space_name": "Chapel Street shop",
+        "landlord": "Elm City Properties",
+        "monthly_rent": 2400.0,
+        "next_due": "2026-09-02",
+        "shop_date": "2026-08-31",
+        "days_until_due": 2,
+        "status": "upcoming",
+        "notes": null
+      },
+      "actual": {
+        "lease_id": 1,
+        "space_name": "Chapel Street shop",
+        "landlord": "Elm City Properties",
+        "monthly_rent": 2400.0,
+        "next_due": "2026-09-02",
+        "shop_date": "2026-08-31",
+        "days_until_due": 2,
+        "status": "upcoming",
+        "notes": null
+      },
+      "matches_database": true
+    }
+  ],
+  "error_cases": [
+    {
+      "name": "reject_zero_order_quantity",
+      "tool": "check_inventory_stock",
+      "arguments": {
+        "sku": "CC-TEE-WHITE",
+        "size": "S",
+        "order_quantity": 0
+      },
+      "is_error": true
+    },
+    {
+      "name": "reject_numeric_string",
+      "tool": "check_inventory_stock",
+      "arguments": {
+        "sku": "CC-TEE-WHITE",
+        "size": "S",
+        "order_quantity": "1"
+      },
+      "is_error": true
+    },
+    {
+      "name": "reject_unknown_vendor",
+      "tool": "check_vendor_restock_eligibility",
+      "arguments": {
+        "vendor_id": 4
+      },
+      "is_error": true
+    },
+    {
+      "name": "reject_unknown_lease",
+      "tool": "get_lease_due_status",
+      "arguments": {
+        "lease_id": 2
+      },
+      "is_error": true
+    }
+  ],
+  "protocol_version": "2025-11-25",
+  "server_info": {
+    "name": "Campus Customs Operations",
+    "title": null,
+    "version": "1.30.0",
+    "websiteUrl": null,
+    "icons": null
+  },
+  "registered_tools": [
+    "check_inventory_stock",
+    "check_vendor_restock_eligibility",
+    "get_lease_due_status"
+  ],
+  "status": "PASS",
+  "database_hashes_before": {
+    "campus_customs.db": "23686a90d698f7fa6f901a3f0a9774db9cbb31e13151c9e5717275f3321f360a",
+    "campus_customs_new.db": "23686a90d698f7fa6f901a3f0a9774db9cbb31e13151c9e5717275f3321f360a"
+  },
+  "database_hashes_after": {
+    "campus_customs.db": "23686a90d698f7fa6f901a3f0a9774db9cbb31e13151c9e5717275f3321f360a",
+    "campus_customs_new.db": "23686a90d698f7fa6f901a3f0a9774db9cbb31e13151c9e5717275f3321f360a"
+  },
+  "databases_unchanged": true,
+  "session_closed": true
+}

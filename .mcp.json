@@ -1,0 +1,11 @@
+{
+  "mcpServers": {
+    "campus_customs_mcp": {
+      "command": "python",
+      "args": ["-m", "mcp_server.server"],
+      "env": {
+        "PYTHONPATH": "."
+      }
+    }
+  }
+}

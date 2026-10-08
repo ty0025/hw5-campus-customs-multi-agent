@@ -1,0 +1,22 @@
+.env
+.env.*
+!.env.example
+
+# Python environments and generated files
+.venv/
+**/.venv/
+__pycache__/
+**/__pycache__/
+*.py[cod]
+
+# Frontend dependencies and build output
+node_modules/
+**/node_modules/
+dist/
+**/dist/
+
+# Local SQLite files are ignored by default, except the two required HW5 databases.
+*.db
+!data/
+!data/campus_customs.db
+!data/campus_customs_new.db
