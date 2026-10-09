@@ -1,5 +1,5 @@
 {
-  "checked_at": "2026-10-08T08:34:11+08:00",
+  "checked_at": "2026-10-09T09:23:59+08:00",
   "server_registration": "campus_customs_mcp",
   "configuration": {
     "command": "python",
@@ -77,6 +77,132 @@
       "matches_database": true
     },
     {
+      "name": "ticket_101_details",
+      "tool": "get_ticket_details",
+      "arguments": {
+        "ticket_id": 101
+      },
+      "expected": {
+        "ticket_id": 101,
+        "customer_id": "Tauhid Zaman",
+        "type": "customer_order",
+        "subject": "Bulldog tee",
+        "description": "Needs a tee in size S.\nResolution: Requested CC-TEE-WHITE size S is out of stock (0 on hand; shortfall 1). Vendor restock is blocked by overdue invoice 501 ($840); Accounting staged an invoice payment proposal pending human approval. No payment or restock has occurred; fulfillment is paused until approval and subsequent restock.\nResolution: The requested Bulldog tee cannot currently be fulfilled. The ticket is waiting for human approval of the vendor invoice payment proposal; no payment or restock has occurred.\nResolution: Supplier invoice 501 was paid after human approval and the recorded vendor shipment block is cleared. Size S still has zero on hand with a five-day recorded lead time; an unsent backorder draft is saved. The local handling workflow is resolved; no shipment is claimed.",
+        "sku": "CC-TEE-WHITE",
+        "size": "S",
+        "quantity": 1,
+        "lease_id": null,
+        "invoice_id": 501,
+        "invoice_vendor_id": 1,
+        "invoice_vendor_name": "Bulldog Print Co",
+        "status": "resolved",
+        "created_at": "2026-08-31T09:15:00-04:00",
+        "shop_date": "2026-08-31"
+      },
+      "actual": {
+        "ticket_id": 101,
+        "customer_id": "Tauhid Zaman",
+        "type": "customer_order",
+        "subject": "Bulldog tee",
+        "description": "Needs a tee in size S.\nResolution: Requested CC-TEE-WHITE size S is out of stock (0 on hand; shortfall 1). Vendor restock is blocked by overdue invoice 501 ($840); Accounting staged an invoice payment proposal pending human approval. No payment or restock has occurred; fulfillment is paused until approval and subsequent restock.\nResolution: The requested Bulldog tee cannot currently be fulfilled. The ticket is waiting for human approval of the vendor invoice payment proposal; no payment or restock has occurred.\nResolution: Supplier invoice 501 was paid after human approval and the recorded vendor shipment block is cleared. Size S still has zero on hand with a five-day recorded lead time; an unsent backorder draft is saved. The local handling workflow is resolved; no shipment is claimed.",
+        "sku": "CC-TEE-WHITE",
+        "size": "S",
+        "quantity": 1,
+        "lease_id": null,
+        "invoice_id": 501,
+        "invoice_vendor_id": 1,
+        "invoice_vendor_name": "Bulldog Print Co",
+        "status": "resolved",
+        "created_at": "2026-08-31T09:15:00-04:00",
+        "shop_date": "2026-08-31"
+      },
+      "matches_database": true
+    },
+    {
+      "name": "ticket_102_details",
+      "tool": "get_ticket_details",
+      "arguments": {
+        "ticket_id": 102
+      },
+      "expected": {
+        "ticket_id": 102,
+        "customer_id": "Elm City Properties",
+        "type": "rent_notice",
+        "subject": "Rent due",
+        "description": "Email: shop rent due in 2 days.\nResolution: Lease 1 rent of $2,400 is due 2026-09-02; no arrears recorded. Cash balance is $3,400 and a payment proposal is pending human approval. No payment has been made; rent action is paused pending approval.\nResolution: Rent notice verified. The $2,400 rent payment is due September 2, 2026; no arrears are recorded. A payment proposal is pending human approval, so the ticket is waiting for approval and no payment has been made.\nResolution: The recorded $2,400 lease obligation for lease 1 was paid after human approval. The payment is recorded in payments and the lease payment_status is PAID.",
+        "sku": null,
+        "size": null,
+        "quantity": null,
+        "lease_id": 1,
+        "invoice_id": null,
+        "invoice_vendor_id": null,
+        "invoice_vendor_name": null,
+        "status": "resolved",
+        "created_at": "2026-08-31T11:05:00-04:00",
+        "shop_date": "2026-08-31"
+      },
+      "actual": {
+        "ticket_id": 102,
+        "customer_id": "Elm City Properties",
+        "type": "rent_notice",
+        "subject": "Rent due",
+        "description": "Email: shop rent due in 2 days.\nResolution: Lease 1 rent of $2,400 is due 2026-09-02; no arrears recorded. Cash balance is $3,400 and a payment proposal is pending human approval. No payment has been made; rent action is paused pending approval.\nResolution: Rent notice verified. The $2,400 rent payment is due September 2, 2026; no arrears are recorded. A payment proposal is pending human approval, so the ticket is waiting for approval and no payment has been made.\nResolution: The recorded $2,400 lease obligation for lease 1 was paid after human approval. The payment is recorded in payments and the lease payment_status is PAID.",
+        "sku": null,
+        "size": null,
+        "quantity": null,
+        "lease_id": 1,
+        "invoice_id": null,
+        "invoice_vendor_id": null,
+        "invoice_vendor_name": null,
+        "status": "resolved",
+        "created_at": "2026-08-31T11:05:00-04:00",
+        "shop_date": "2026-08-31"
+      },
+      "matches_database": true
+    },
+    {
+      "name": "ticket_103_details",
+      "tool": "get_ticket_details",
+      "arguments": {
+        "ticket_id": 103
+      },
+      "expected": {
+        "ticket_id": 103,
+        "customer_id": "Yale AI Club",
+        "type": "price_override",
+        "subject": "Bulk hoodie discount",
+        "description": "Student org wants 20 hoodies, size M, asking for a bulk discount.\nResolution: Verified 8 of 20 size-M CC-HOOD-NAVY hoodies are on hand (12 short); no restock vendor is linked. List price is $58/unit with $22 cost ($36 gross margin/unit); no discount can be assessed without a target price or budget. Local unsent draft asks Yale AI Club for its target and explains availability. Await customer response before discount/restock decision.\nResolution: Moved Ticket 103 to waiting_customer. Current stock is insufficient for the requested 20 hoodies, and the discount cannot be evaluated until the customer gives a target price or budget.\nResolution: The bulk request was reviewed against stock and pricing: 8 of 20 hoodies are on hand, leaving 12 to replenish. An unsent review draft is saved; no discount or delivery commitment is claimed.",
+        "sku": "CC-HOOD-NAVY",
+        "size": "M",
+        "quantity": 20,
+        "lease_id": null,
+        "invoice_id": null,
+        "invoice_vendor_id": null,
+        "invoice_vendor_name": null,
+        "status": "resolved",
+        "created_at": "2026-08-31T16:55:00-04:00",
+        "shop_date": "2026-08-31"
+      },
+      "actual": {
+        "ticket_id": 103,
+        "customer_id": "Yale AI Club",
+        "type": "price_override",
+        "subject": "Bulk hoodie discount",
+        "description": "Student org wants 20 hoodies, size M, asking for a bulk discount.\nResolution: Verified 8 of 20 size-M CC-HOOD-NAVY hoodies are on hand (12 short); no restock vendor is linked. List price is $58/unit with $22 cost ($36 gross margin/unit); no discount can be assessed without a target price or budget. Local unsent draft asks Yale AI Club for its target and explains availability. Await customer response before discount/restock decision.\nResolution: Moved Ticket 103 to waiting_customer. Current stock is insufficient for the requested 20 hoodies, and the discount cannot be evaluated until the customer gives a target price or budget.\nResolution: The bulk request was reviewed against stock and pricing: 8 of 20 hoodies are on hand, leaving 12 to replenish. An unsent review draft is saved; no discount or delivery commitment is claimed.",
+        "sku": "CC-HOOD-NAVY",
+        "size": "M",
+        "quantity": 20,
+        "lease_id": null,
+        "invoice_id": null,
+        "invoice_vendor_id": null,
+        "invoice_vendor_name": null,
+        "status": "resolved",
+        "created_at": "2026-08-31T16:55:00-04:00",
+        "shop_date": "2026-08-31"
+      },
+      "matches_database": true
+    },
+    {
       "name": "vendor_1_clearance",
       "tool": "check_vendor_restock_eligibility",
       "arguments": {
@@ -88,19 +214,9 @@
         "specialty": "apparel reprint",
         "lead_days": 5,
         "shop_date": "2026-08-31",
-        "unpaid_invoices": [
-          {
-            "invoice_id": 501,
-            "amount": 840.0,
-            "due_date": "2026-08-28",
-            "status": "open",
-            "description": "Rush reprint CC-TEE-WHITE S",
-            "overdue": true,
-            "days_overdue": 3
-          }
-        ],
-        "total_unpaid": 840.0,
-        "blocked_by_unpaid_invoices": true
+        "unpaid_invoices": [],
+        "total_unpaid": 0,
+        "blocked_by_unpaid_invoices": false
       },
       "actual": {
         "vendor_id": 1,
@@ -108,19 +224,9 @@
         "specialty": "apparel reprint",
         "lead_days": 5,
         "shop_date": "2026-08-31",
-        "unpaid_invoices": [
-          {
-            "invoice_id": 501,
-            "amount": 840.0,
-            "due_date": "2026-08-28",
-            "status": "open",
-            "description": "Rush reprint CC-TEE-WHITE S",
-            "overdue": true,
-            "days_overdue": 3
-          }
-        ],
-        "total_unpaid": 840.0,
-        "blocked_by_unpaid_invoices": true
+        "unpaid_invoices": [],
+        "total_unpaid": 0.0,
+        "blocked_by_unpaid_invoices": false
       },
       "matches_database": true
     },
@@ -209,6 +315,68 @@
         "notes": null
       },
       "matches_database": true
+    },
+    {
+      "name": "cash_balance_checking",
+      "tool": "get_cash_balance",
+      "arguments": {
+        "account_name": "Operating Cash"
+      },
+      "expected": {
+        "account_name": "checking",
+        "balance": 160.0,
+        "as_of_date": "2026-08-31"
+      },
+      "actual": {
+        "account_name": "checking",
+        "balance": 160.0,
+        "as_of_date": "2026-08-31"
+      },
+      "matches_database": true
+    },
+    {
+      "name": "pricing_CC-HOOD-NAVY",
+      "tool": "get_pricing_and_margin",
+      "arguments": {
+        "sku": "CC-HOOD-NAVY"
+      },
+      "expected": {
+        "sku": "CC-HOOD-NAVY",
+        "unit_cost": 22.0,
+        "list_price": 58.0,
+        "gross_margin_per_unit": 36.0,
+        "gross_margin_percent": 62.07
+      },
+      "actual": {
+        "sku": "CC-HOOD-NAVY",
+        "unit_cost": 22.0,
+        "list_price": 58.0,
+        "gross_margin_per_unit": 36.0,
+        "gross_margin_percent": 62.07
+      },
+      "matches_database": true
+    },
+    {
+      "name": "pricing_CC-TEE-WHITE",
+      "tool": "get_pricing_and_margin",
+      "arguments": {
+        "sku": "CC-TEE-WHITE"
+      },
+      "expected": {
+        "sku": "CC-TEE-WHITE",
+        "unit_cost": 8.0,
+        "list_price": 28.0,
+        "gross_margin_per_unit": 20.0,
+        "gross_margin_percent": 71.43
+      },
+      "actual": {
+        "sku": "CC-TEE-WHITE",
+        "unit_cost": 8.0,
+        "list_price": 28.0,
+        "gross_margin_per_unit": 20.0,
+        "gross_margin_percent": 71.43
+      },
+      "matches_database": true
     }
   ],
   "error_cases": [
@@ -260,16 +428,22 @@
   "registered_tools": [
     "check_inventory_stock",
     "check_vendor_restock_eligibility",
-    "get_lease_due_status"
+    "get_cash_balance",
+    "get_lease_due_status",
+    "get_pricing_and_margin",
+    "get_ticket_details",
+    "propose_payment",
+    "save_customer_draft",
+    "update_ticket_status"
   ],
   "status": "PASS",
   "database_hashes_before": {
     "campus_customs.db": "23686a90d698f7fa6f901a3f0a9774db9cbb31e13151c9e5717275f3321f360a",
-    "campus_customs_new.db": "23686a90d698f7fa6f901a3f0a9774db9cbb31e13151c9e5717275f3321f360a"
+    "campus_customs_new.db": "912673d8ef92285f824a719dbcafcb74cd55eac4954621792ade0a46e2361a35"
   },
   "database_hashes_after": {
     "campus_customs.db": "23686a90d698f7fa6f901a3f0a9774db9cbb31e13151c9e5717275f3321f360a",
-    "campus_customs_new.db": "23686a90d698f7fa6f901a3f0a9774db9cbb31e13151c9e5717275f3321f360a"
+    "campus_customs_new.db": "912673d8ef92285f824a719dbcafcb74cd55eac4954621792ade0a46e2361a35"
   },
   "databases_unchanged": true,
   "session_closed": true

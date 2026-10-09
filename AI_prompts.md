@@ -3,126 +3,120 @@
 ## Problem 1: Vibe coder prompts
 
 ### Initial Prompt
-"Set up the baseline project repository for Homework 5 and create an `AI_prompts.md` file to record prompt iterations across all tasks. Ensure the template captures the problem title, initial custom prompt, follow-up prompt, and an evaluation of what was missing in the initial run."
+"Set up a clean Homework 5 workspace and a prompt log that records how each solution changed after review."
 
 ### Follow-up Prompt
-"Make sure each problem section has a dedicated heading and an explicit one-sentence analysis of why the first response was incomplete, especially ensuring we don't dump raw assignment text into the log."
+"Give every problem its own section with a custom first prompt, a refining follow-up, and one clear note about the first attempt's gap."
 
 ### What was lacking after the first prompt
-The initial output created a generic markdown skeleton without enforcing the specific three-part schema (initial prompt, follow-up prompt, and single-sentence post-run deficiency diagnosis) required by the grading rubric.
+The first draft was only a generic outline and did not enforce the three required prompt fields for every problem.
 
 ## Problem 2: Study the Campus Customs database
 
 ### Initial Prompt
-"Inspect the Campus Customs database, preserve it by working from a copy, list every table's exact SQLite fields and types, and explain how the three open tickets connect to stock and business records."
+"Preserve the supplied database, create a working copy, inspect every table, and map the three open tickets to their stock and business records."
 
 ### Follow-up Prompt
-"Resolve each open ticket's invoice and lease references, SKU/size stock, pricing, vendor lead time, and unpaid invoice status against desk.date_today, and note any missing request detail."
+"Use SQLite PRAGMA output for exact field names and types, then trace each ticket's SKU, invoice, lease, vendor, pricing, and business-date context."
 
 ### What was lacking after the first prompt
-The first pass captured ticket rows and schemas but did not yet resolve their invoice, lease, stock, vendor, pricing, and business-date context.
+The first inspection listed the tables but did not fully connect the ticket rows to their related liabilities and inventory records.
 
 ## Problem 3: Build the MCP server
 
 ### Initial Prompt
-> 接下来我们来做Q3：
->
-> Implement Problem 3 ("Build the MCP server") for Homework 5.
-
-These are the user's exact opening instructions; the accompanying full assignment specification is omitted from this log.
+"Build a local FastMCP module with focused stock, vendor-invoice, and lease checks against the working database, using typed signatures and useful tool descriptions."
 
 ### Follow-up Prompt
-"按数据库真实关联标注，并注明题面编号冲突（推荐）"
+"Verify each tool against the real database relationships, use desk.date_today for lease timing, and document the actual ticket-number mismatch."
 
 ### What was lacking after the first prompt
-The initial pass identified the ticket-number conflict but had not yet settled how the tool documentation should map to the actual database.
+The initial tool plan identified the ticket-number conflict but had not yet explained how the tools should follow the database's real links.
 
 ## Problem 4: Add the MCP server to vibe coder and test each tool
 
 ### Initial Prompt
-> Implement Problem 4 ("Add the MCP server to vibe coder and test each tool") for Homework 5.
->
-> Execute the following steps programmatically and verify all outputs against the database:
-
-These are the user's exact opening instructions; the supplied configuration specification is omitted from this log.
+"Register the local FastMCP module in the project configuration and verify its read-only tools over stdio against the working database."
 
 ### Follow-up Prompt
-No separate follow-up prompt was issued; the configuration, startup fixes, and verification were completed from the initial request.
+"Make the command resolve from the project root, compare tool responses with independent SQL results, and record that the databases stayed unchanged."
 
 ### What was lacking after the first prompt
-The first inspection found no stdio entry point and no MCP dependency in the default interpreter, so startup and project-environment handling were needed before the supplied configuration could work.
+The first setup did not include a repeatable stdio check that compared live tool responses with the database.
 
 ## Problem 5: Build the agent team and grow the MCP tools
 
 ### Initial Prompt
-"Implement a five-agent Campus Customs team that uses the local MCP server for shop facts, routes through Portkey with the approved model, respects human approval and draft-only rules, and keeps an append-only execution history."
+"Build the five-role operations team around the local MCP boundary, route every agent through Portkey with gpt-6-luna, and keep decisions auditable and approval-gated."
 
 ### Follow-up Prompt
-"Resume without replacing the existing model and server files: validate them, finish the role prompts and bounded cross-agent delegation, then document the full tool suite and safety rules."
+"Finish the role prompts, bounded cross-agent delegation, complete tool registry, and append-only audit handling without replacing the existing model or server work."
 
 ### What was lacking after the first prompt
-The first pass added typed schemas and MCP operations but did not yet supply the five role prompts, connected agent orchestration, persistent audit logger, or complete team documentation.
+The first implementation had schemas and tools but still needed the five agent prompts, connected delegation, and durable execution logging.
 
 ## Problem 6: Plan the three tickets
 
 ### Initial Prompt
-"Create an offline-ready operations desk for tickets 101–103 that shows each ticket's expected agent handoffs and MCP actions, while leaving the Cash and Reflection tabs for later problems."
+"Create an offline desk page with separate ticket, cash, and reflection tabs, and lay out the expected specialist handoffs and tool calls for each ticket."
 
 ### Follow-up Prompt
-"Make the five tabs keyboard-accessible, keep each ticket's delegation path limited to relevant specialists, and clearly flag any mismatch between the requested ticket pathways and the database mapping."
+"Keep each path limited to relevant specialists, make the tabs keyboard accessible, and call out any ticket-number mismatch before backend execution."
 
 ### What was lacking after the first prompt
-The initial prompt did not resolve the mismatch between the requested ticket pathways and the database's ticket-number mapping, so the dashboard needed an explicit reconciliation note before backend wiring.
-*** End of File
+The initial plan followed the assignment's ticket labels before reconciling them with the actual database records.
 
 ## Problem 7: Backend routes
 
 ### Initial Prompt
-"Implement the FastAPI layer in `backend/main.py` to serve the ticket board, launch the existing agent team, expose recent audit events, report checking cash, approve staged payments safely, and restore the working database from its pristine copy. Keep agent runs locked to `gpt-6-luna` through Portkey and make the app start with `uvicorn main:app` from `backend/`."
+"Connect the dashboard to the ticket board, agent runner, event feed, cash balance, payment approval, and database reset through FastAPI routes."
 
 ### Follow-up Prompt
-"Harden payment approval with a transactional cash-floor check and matching staged-payment/liability validation, preserve the audit trail across runs, and make the database and agent imports resolve correctly when Uvicorn starts from the backend directory."
+"Make approvals transactional, reject payments that would overdraw cash, preserve audit history, and support the requested Uvicorn command from backend/."
 
 ### What was lacking after the first prompt
-The initial implementation still needed explicit transactional safeguards for payment finalization and reliable project-root resolution for the requested startup command.
+The first route pass still needed a transactional cash-floor check and reliable project-path handling.
+
 ## Problem 8: Agent dashboard
 
 ### Initial Prompt
-"Build a polished Campus Customs operator dashboard in `frontend/` with React, Vite and TypeScript, connected to the FastAPI service for tickets, agent activity, cash balance, approvals, and reset. Give the workspace a clear physical-desk layout that makes the five specialists, payment decisions, and ticket outcomes easy to follow."
+"Build a clear React, Vite, and TypeScript operations desk that shows tickets, live agent activity, cash, payment proposals, and outcomes."
 
 ### Follow-up Prompt
-"Refine the dashboard with distinct colors and identities for each specialist, live event polling while a ticket runs, a human approval card tied to staged-payment details, responsive three-pane ergonomics, and immediate balance and resolution feedback after actions."
+"Give the five agents distinct visual identities, poll live events during runs, and make approval and resolution feedback immediate and easy to read."
 
 ### What was lacking after the first prompt
-The initial dashboard direction did not yet define how live traces, agent-specific identity, and payment approval feedback should fit into one operator workflow.
+The first dashboard direction did not yet explain how live traces, agent identity, and approval feedback fit into one operator workflow.
 
 ## Problem 9: Resolve the tickets
 
 ### Initial Prompt
-"Build a foreground-only Q9 runner that resets the working Campus Customs database, runs the multi-agent team on tickets 101–103 in order, handles approved payments, reconciles cash, and publishes the resolved ticket and board artifacts."
+"Run the three tickets sequentially in a foreground-only workflow, reconcile approved payments, and publish the resolved-ticket artifacts and cash ledger."
 
 ### Follow-up Prompt
-"Reconcile each ticket against its actual invoice and lease references before approving any payment; keep the original database untouched, preserve audit history and the dashboard's Expected sections, and report any prompt-to-database numbering conflict instead of inventing a relationship."
+"Use the database's real invoice and lease links, reset before the batch, preserve the audit history and Expected panels, and verify the final balance."
 
 ### What was lacking after the first prompt
-The initial run plan needed a ticket-to-liability check because the prompt's payment ticket numbers conflict with the foreign-key relationships stored in SQLite.
+The first run plan followed the prompt's payment ticket numbers without first reconciling them against the foreign-key links in SQLite.
+
 ## Problem 10: Reflection
 
 ### Initial Prompt
-"Use the completed run record, actual database ticket identities, and reconciled cash ledger to write a candid, first-person engineering post-mortem with per-ticket grades, plan-versus-run findings, delegation tradeoffs, and examples of work the current tools can and cannot support."
+"Write a candid first-person post-mortem from the successful runs, actual ticket mapping, audit evidence, and reconciled cash ledger."
 
 ### Follow-up Prompt
-"Keep the tone direct and conversational, but verify every ticket and payment claim against the evidence, remove unmeasured token or speed claims, and distinguish an approved payment from actual fulfillment and a resolved status from a resolved customer request."
+"Separate administrative closure from customer fulfillment, compare planned and actual handoffs, and remove token or speed claims that the logs cannot substantiate."
 
 ### What was lacking after the first prompt
-The initial draft repeated the planning document's mistaken ticket mapping and treated administrative status changes as proof of completed customer outcomes.
+The first draft repeated the planning document's mistaken ticket mapping and treated status changes as proof of completed customer outcomes.
+
 ## Problem 11: Submit to GitHub
 
 ### Initial Prompt
-"Prepare Homework 5 for its confirmed GitHub destination, check the required prompt names, database tracking, secret exclusions, and setup files, then record the URL and publish the finished submission."
+"Prepare the Homework 5 project for its chosen GitHub home, verify the submission files and database tracking, and document how to set up and run the desk."
 
 ### Follow-up Prompt
-"Verify both database files are staged, confirm the README documents the reset and three-ticket workflow, then commit the prepared tree on main and push it to the requested origin."
+"Replace the URL placeholder, confirm secrets are excluded and both databases are staged, then commit the finished project on main and push it to origin."
 
 ### What was lacking after the first prompt
-The first preparation pass left a placeholder URL and no remote, commit, or published branch, so the submission was staged but not yet available at its intended GitHub destination.
+The first preparation pass staged the project but left a placeholder URL and had not created a commit or published branch.

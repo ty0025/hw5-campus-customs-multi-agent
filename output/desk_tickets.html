@@ -128,7 +128,7 @@
             <ul class="tool-list"><li>get_ticket_details · tickets</li><li>check_inventory_stock · inventory</li><li>save_customer_draft · drafts</li><li>update_ticket_status · tickets</li></ul>
           </div>
         </div>
-        <div class="actual-section"><h3 class="section-kicker"><span class="dot">✓</span> Actual</h3><p class="actual-lead"><strong>Ticket 101 · customer_order</strong> Invoice 501 was cleared and the vendor shipment hold is removed; size S remains out of stock, with a backorder draft saved and no shipment claimed.</p><div class="actual-columns"><div><h4>Participating agents</h4><ul><li>Boss</li><li>Inventory</li><li>Accounting</li></ul></div><div><h4>Delegation chain</h4><ul><li>Boss → Inventory</li><li>Inventory → Accounting</li></ul></div><div><h4>Exact MCP tools invoked</h4><ul><li><code>get_ticket_details</code></li><li><code>check_inventory_stock</code></li><li><code>check_vendor_restock_eligibility</code></li><li><code>get_cash_balance</code></li><li><code>propose_payment</code></li><li><code>update_ticket_status</code></li><li><code>save_customer_draft</code></li></ul></div></div><h4>Human approvals recorded</h4><ul><li>Bulldog Print Co: invoice 501 · $840.00 · PAID</li></ul><details><summary>Boss run summary</summary><p>The requested Bulldog tee cannot currently be fulfilled. The ticket is waiting for human approval of the vendor invoice payment proposal; no payment or restock has occurred.</p></details></div>
+        <div class="actual-section"><h3 class="section-kicker"><span class="dot">✓</span> Actual</h3><p class="actual-lead"><strong>Ticket 101 · customer_order</strong> Invoice 501 was cleared and the vendor shipment hold is removed; size S remains out of stock, with a backorder draft saved and no shipment claimed.</p><div class="actual-columns"><div><h4>Participating agents</h4><ul><li>Boss</li><li>Inventory</li><li>Accounting</li></ul></div><div><h4>Delegation chain</h4><ul><li>Boss → Inventory</li><li>Inventory → Accounting</li></ul></div><div><h4>Exact MCP tools invoked</h4><ul><li><code>get_ticket_details</code></li><li><code>check_inventory_stock</code></li><li><code>check_vendor_restock_eligibility</code></li><li><code>get_cash_balance</code></li><li><code>propose_payment</code></li><li><code>update_ticket_status</code></li><li><code>save_customer_draft</code></li></ul></div></div><h4>Human approvals recorded</h4><ul><li>Bulldog Print Co: invoice 501 · $840.00 · PAID</li></ul><details><summary>Boss agent-run summary (before human approval)</summary><p>At agent-run close, the $840 invoice proposal still needed approval. Human approval later cleared invoice 501; size S remains out of stock and no purchase order or goods receipt is recorded, so the customer order remains unfulfilled.</p></details></div>
       </div>
     </section>
 
@@ -153,7 +153,7 @@
             <ul class="tool-list"><li>get_ticket_details · tickets</li><li>check_inventory_stock · inventory</li><li>get_vendor_unpaid_invoices · invoices, vendors</li><li>get_cash_balance · cash_accounts</li><li>propose_payment · approvals</li><li>update_ticket_status · tickets</li></ul>
           </div>
         </div>
-        <div class="actual-section"><h3 class="section-kicker"><span class="dot">✓</span> Actual</h3><p class="actual-lead"><strong>Ticket 102 · rent_notice</strong> The recorded monthly rent liability was paid through human approval and the lease is marked PAID.</p><div class="actual-columns"><div><h4>Participating agents</h4><ul><li>Boss</li><li>Facilities</li><li>Accounting</li></ul></div><div><h4>Delegation chain</h4><ul><li>Boss → Facilities</li><li>Facilities → Accounting</li></ul></div><div><h4>Exact MCP tools invoked</h4><ul><li><code>get_ticket_details</code></li><li><code>get_lease_due_status</code></li><li><code>get_cash_balance</code></li><li><code>propose_payment</code></li><li><code>update_ticket_status</code></li></ul></div></div><h4>Human approvals recorded</h4><ul><li>Elm City Properties: lease 1 · $2,400.00 · PAID</li></ul><details><summary>Boss run summary</summary><p>Rent notice verified. The $2,400 rent payment is due September 2, 2026; no arrears are recorded. A payment proposal is pending human approval, so the ticket is waiting for approval and no payment has been made.</p></details></div>
+        <div class="actual-section"><h3 class="section-kicker"><span class="dot">✓</span> Actual</h3><p class="actual-lead"><strong>Ticket 102 · rent_notice</strong> The recorded monthly rent liability was paid through human approval and the lease is marked PAID.</p><div class="actual-columns"><div><h4>Participating agents</h4><ul><li>Boss</li><li>Facilities</li><li>Accounting</li></ul></div><div><h4>Delegation chain</h4><ul><li>Boss → Facilities</li><li>Facilities → Accounting</li></ul></div><div><h4>Exact MCP tools invoked</h4><ul><li><code>get_ticket_details</code></li><li><code>get_lease_due_status</code></li><li><code>get_cash_balance</code></li><li><code>propose_payment</code></li><li><code>update_ticket_status</code></li></ul></div></div><h4>Human approvals recorded</h4><ul><li>Elm City Properties: lease 1 · $2,400.00 · PAID</li></ul><details><summary>Boss agent-run summary (before human approval)</summary><p>At agent-run close, the $2,400 rent proposal still needed approval. Human approval later recorded the payment and marked lease 1 paid; the proposal text reflects the earlier point in the run.</p></details></div>
       </div>
     </section>
 
@@ -176,7 +176,7 @@
             <ul class="tool-list"><li>get_ticket_details · tickets</li><li>get_lease_due_status · leases, desk</li><li>get_cash_balance · cash_accounts</li><li>propose_payment · approvals</li><li>update_ticket_status · tickets</li></ul>
           </div>
         </div>
-        <div class="actual-section"><h3 class="section-kicker"><span class="dot">✓</span> Actual</h3><p class="actual-lead"><strong>Ticket 103 · price_override</strong> The requested bulk discount was reviewed; stock is short by 12 hoodies, so an unsent review draft records that no discount or delivery date is confirmed.</p><div class="actual-columns"><div><h4>Participating agents</h4><ul><li>Boss</li><li>Inventory</li><li>Accounting</li><li>Customer Service</li></ul></div><div><h4>Delegation chain</h4><ul><li>Boss → Inventory</li><li>Boss → Accounting</li><li>Boss → Customer Service</li></ul></div><div><h4>Exact MCP tools invoked</h4><ul><li><code>get_ticket_details</code></li><li><code>check_inventory_stock</code></li><li><code>get_pricing_and_margin</code></li><li><code>save_customer_draft</code></li><li><code>update_ticket_status</code></li></ul></div></div><details><summary>Boss run summary</summary><p>Moved Ticket 103 to waiting_customer. Current stock is insufficient for the requested 20 hoodies, and the discount cannot be evaluated until the customer gives a target price or budget.</p></details></div>
+        <div class="actual-section"><h3 class="section-kicker"><span class="dot">✓</span> Actual</h3><p class="actual-lead"><strong>Ticket 103 · price_override</strong> The requested bulk discount was reviewed; stock is short by 12 hoodies, so an unsent review draft records that no discount or delivery date is confirmed.</p><div class="actual-columns"><div><h4>Participating agents</h4><ul><li>Boss</li><li>Inventory</li><li>Accounting</li><li>Customer Service</li></ul></div><div><h4>Delegation chain</h4><ul><li>Boss → Inventory</li><li>Boss → Accounting</li><li>Boss → Customer Service</li></ul></div><div><h4>Exact MCP tools invoked</h4><ul><li><code>get_ticket_details</code></li><li><code>check_inventory_stock</code></li><li><code>get_pricing_and_margin</code></li><li><code>save_customer_draft</code></li><li><code>update_ticket_status</code></li></ul></div></div><details><summary>Agent-run recommendation and final database state</summary><p>The agent recommended waiting for the customer. The later resolution handler wrote <code>resolved</code> to the ticket row, but the business request still needs a target price or budget and confirmation of the 12-unit shortfall.</p></details></div>
       </div>
     </section>
 
@@ -239,129 +239,6 @@
   });
 </script>
 <template id="reflection-postmortem-template">
-<div class="reflection-content" style="line-height:1.6;color:#1e293b;padding:1.5rem;max-width:1200px;margin:auto;font-family:system-ui,-apple-system,Segoe UI,sans-serif">
-  <h2 style="color:#0f172a">Campus Customs Multi-Agent System: Operational Post-Mortem &amp; Reflection</h2>
-  <p style="background:#eff6ff;border-left:4px solid #2563eb;padding:1rem"><strong>My evidence boundary:</strong> I use the database-backed ticket identities, the successful audit run, and the reconciled ledger below. The database mapping differs from the earlier planning assumptions: Ticket 102 is rent, and Ticket 103 is a hoodie discount request. I treat a stored <code>resolved</code> status as an administrative field, not proof that the customer received goods or an agreed decision.</p>
-
-  <section style="margin:2rem 0">
-    <h3>1. My assessment of the three ticket runs</h3>
-    <div style="background:#f8fafc;border-left:4px solid #d97706;padding:1rem;margin:1rem 0;border-radius:8px">
-      <h4>Ticket 101 — T-shirt order and stock shortfall | My score: 5/10</h4>
-      <p>I credit the run for detecting that the requested size S had <strong>0 units on hand</strong>, finding the related <strong>$840 invoice 501</strong> for Bulldog Print Co, and settling that invoice through the approval-controlled payment path. The cash ledger records Ticket 101 at <strong>-$840.00</strong>. The operational result still falls short: no purchase order or goods receipt was recorded, size S remained out of stock, and the order was not physically fulfilled. The successful agent chain was Boss → Inventory → Accounting; Customer Service did not participate as an agent, although the coordinator saved a local, unsent customer draft. I should not call this a completed customer order simply because the ticket row says <code>resolved</code>.</p>
-      <p><strong>What I would change:</strong> keep the ticket pending fulfillment until an actual restock and reservation are recorded, and send the draft back through a manager review step. Clearing an invoice removes a vendor blocker; it does not itself create or receive an order.</p>
-    </div>
-    <div style="background:#f8fafc;border-left:4px solid #059669;padding:1rem;margin:1rem 0;border-radius:8px">
-      <h4>Ticket 102 — Lease rent obligation | My score: 8/10</h4>
-      <p>The database shows a <strong>$2,400 lease payment due 2026-09-02</strong>, while <code>desk.date_today</code> is <strong>2026-08-31</strong>. Facilities correctly used the business date and found the rent was due in two days, not overdue. Accounting staged the proposal, a human approved it, and the ledger records <strong>-$2,400.00</strong>; the lease is marked paid. The observed chain, Boss → Facilities → Accounting → human approval, respected the financial boundary and cleared the liability. My reservation is that the system paid ahead of the due date without recording a policy or benefit for early payment, and the early planning document had assigned the rent scenario to Ticket 103.</p>
-      <p><strong>What I would change:</strong> distinguish “due soon” from “overdue” in the ticket outcome and require an explicit reason when a payment is made before its due date.</p>
-    </div>
-    <div style="background:#f8fafc;border-left:4px solid #0284c7;padding:1rem;margin:1rem 0;border-radius:8px">
-      <h4>Ticket 103 — Discount request for 20 navy hoodies | My score: 4/10</h4>
-      <p>Inventory found only <strong>8 of 20 hoodies</strong>, leaving a 12-unit shortfall. Accounting used the available pricing data: a <strong>$58 price</strong> and <strong>$22 unit cost</strong> imply <strong>$36 gross margin per unit</strong> and a <strong>62.07% margin rate</strong> before any discount. The customer had not specified a target discount price, so Customer Service saved a draft asking for the customer's target price or budget. Boss, Inventory, Accounting, and Customer Service contributed, and the ticket generated <strong>$0.00 cash impact</strong>. That is useful triage, but it is not a discount decision: the customer has not answered, no discount was approved, and 12 units are still unavailable. The final <code>resolved</code> status therefore overstates the business outcome.</p>
-      <p><strong>What I would change:</strong> leave this ticket in a waiting-for-customer state until the discount terms are known, then recheck margin and stock before accepting any quantity commitment.</p>
-    </div>
-  </section>
-
-  <section style="margin:2rem 0">
-    <h3>2. Planned pathways compared with what actually happened</h3>
-    <p>The largest discrepancy was not an agent mistake: the initial plan attached the vendor-restock case to Ticket 102 and the lease case to Ticket 103, while the database says Ticket 102 is the lease and Ticket 103 is the discount request. I accepted the database-grounded mapping for execution; future planning should inspect ticket records before writing ticket-specific paths.</p>
-    <div style="overflow-x:auto"><table style="width:100%;border-collapse:collapse;font-size:.95rem">
-      <thead><tr style="background:#e2e8f0;text-align:left"><th style="padding:.65rem;border:1px solid #cbd5e1">Ticket</th><th style="padding:.65rem;border:1px solid #cbd5e1">Earlier expected path</th><th style="padding:.65rem;border:1px solid #cbd5e1">Successful runtime evidence</th><th style="padding:.65rem;border:1px solid #cbd5e1">My variance finding</th></tr></thead>
-      <tbody>
-        <tr><td style="padding:.65rem;border:1px solid #cbd5e1"><strong>101</strong></td><td style="padding:.65rem;border:1px solid #cbd5e1">Boss → Inventory → Customer Service → Boss</td><td style="padding:.65rem;border:1px solid #cbd5e1">Boss → Inventory → Accounting; coordinator saved the customer draft; invoice paid</td><td style="padding:.65rem;border:1px solid #cbd5e1">Invoice clearance was needed, but the actual system did not order or receive stock. The draft did not make the order fulfilled.</td></tr>
-        <tr><td style="padding:.65rem;border:1px solid #cbd5e1"><strong>102</strong></td><td style="padding:.65rem;border:1px solid #cbd5e1">Earlier plan expected vendor restock and invoice clearance</td><td style="padding:.65rem;border:1px solid #cbd5e1">Boss → Facilities → Accounting → human approval; $2,400 rent paid</td><td style="padding:.65rem;border:1px solid #cbd5e1">The plan used the wrong ticket mapping; runtime correctly followed the lease data and business date.</td></tr>
-        <tr><td style="padding:.65rem;border:1px solid #cbd5e1"><strong>103</strong></td><td style="padding:.65rem;border:1px solid #cbd5e1">Earlier plan expected lease review and rent payment</td><td style="padding:.65rem;border:1px solid #cbd5e1">Boss consulted Inventory, Accounting, and Customer Service; 8/20 in stock; customer clarification draft saved</td><td style="padding:.65rem;border:1px solid #cbd5e1">The request was for a discount, not rent. It remained commercially undecided despite the final resolved status.</td></tr>
-      </tbody>
-    </table></div>
-    <p>The successful audit run records <strong>3 agent rounds for Ticket 101, 3 for Ticket 102, and 4 for Ticket 103</strong>. I cannot support a percentage claim about token savings or overhead because the retained evidence does not provide a consistent token-count comparison. The audit trail also includes two earlier failed attempts, so its chronological history is useful for debugging but should not be confused with the successful run alone.</p>
-  </section>
-
-  <section style="margin:2rem 0">
-    <h3>3. Cash reconciliation and control review</h3>
-    <div style="overflow-x:auto"><table style="width:100%;max-width:760px;border-collapse:collapse"><thead><tr style="background:#e2e8f0"><th style="padding:.65rem;border:1px solid #cbd5e1;text-align:left">Ledger item</th><th style="padding:.65rem;border:1px solid #cbd5e1;text-align:right">Change</th><th style="padding:.65rem;border:1px solid #cbd5e1;text-align:right">Balance</th></tr></thead><tbody>
-      <tr><td style="padding:.65rem;border:1px solid #cbd5e1">Starting Checking balance after reset</td><td style="padding:.65rem;border:1px solid #cbd5e1;text-align:right">—</td><td style="padding:.65rem;border:1px solid #cbd5e1;text-align:right">$3,400.00</td></tr>
-      <tr><td style="padding:.65rem;border:1px solid #cbd5e1">Ticket 101 — invoice 501, Bulldog Print Co</td><td style="padding:.65rem;border:1px solid #cbd5e1;text-align:right">-$840.00</td><td style="padding:.65rem;border:1px solid #cbd5e1;text-align:right">$2,560.00</td></tr>
-      <tr><td style="padding:.65rem;border:1px solid #cbd5e1">Ticket 102 — lease rent</td><td style="padding:.65rem;border:1px solid #cbd5e1;text-align:right">-$2,400.00</td><td style="padding:.65rem;border:1px solid #cbd5e1;text-align:right">$160.00</td></tr>
-      <tr><td style="padding:.65rem;border:1px solid #cbd5e1">Ticket 103 — discount request</td><td style="padding:.65rem;border:1px solid #cbd5e1;text-align:right">$0.00</td><td style="padding:.65rem;border:1px solid #cbd5e1;text-align:right">$160.00</td></tr>
-      <tr style="font-weight:700;background:#f1f5f9"><td style="padding:.65rem;border:1px solid #cbd5e1">Ending Checking balance (database)</td><td style="padding:.65rem;border:1px solid #cbd5e1;text-align:right">Net -$3,240.00</td><td style="padding:.65rem;border:1px solid #cbd5e1;text-align:right">$160.00</td></tr>
-    </tbody></table></div>
-    <p>The arithmetic reconciles: <strong>$3,400.00 − $840.00 − $2,400.00 + $0.00 = $160.00</strong>, matching the working database. Human approval and the balance-floor check worked for both recorded payments. Yet control success does not erase the weak business outcome on Ticket 101: we cleared an invoice but did not record the purchase needed to fix the stockout.</p>
-  </section>
-
-  <section style="margin:2rem 0">
-    <h3>4. Where one tool-using agent would be simpler</h3>
-    <ul>
-      <li><strong>Ticket 102’s date check:</strong> comparing the lease due date with <code>desk.date_today</code> is deterministic. A single operations agent could retrieve the lease, label it due soon, check cash, and prepare a proposal; Facilities remains valuable for ownership, while Accounting should remain the approval-bound financial specialist.</li>
-      <li><strong>Ticket 101’s customer update:</strong> stock lookup and a draft are a short linear workflow. The run involved Inventory and Accounting, while the coordinator saved a draft outside a Customer Service agent turn; that split did not produce a completed order or a clear return to managerial arbitration.</li>
-      <li><strong>Ticket 103’s discount triage:</strong> the cost/margin calculation and stock count are simple tool-backed checks, but the missing customer target price still requires a follow-up. Multi-agent roles can help review the commercial decision, though they cannot replace missing customer information.</li>
-    </ul>
-    <p>I would reserve multiple agents for genuine separation of duties—especially financial approval—and use deterministic orchestration for straightforward reads, arithmetic, and ticket-state transitions. A role boundary is useful only when the workflow records the handoff and the final state matches the real-world outcome.</p>
-  </section>
-
-  <section style="margin:2rem 0">
-    <h3>5. Three additional problems the current tools can support</h3>
-    <ol>
-      <li><strong>Student club bulk-discount screening:</strong> use <code>get_pricing_and_margin</code> and <code>check_inventory_stock</code> to estimate margin and available quantities, then save a draft through <code>save_customer_draft</code>; do not promise the discount before the requested price and quantity are confirmed.</li>
-      <li><strong>Backorder status for a known SKU:</strong> use <code>check_inventory_stock</code> and the existing ticket details to explain the shortfall, then keep a customer update as a local draft; confirm vendor timing only when the available vendor data actually supplies a lead time.</li>
-      <li><strong>Upcoming rent and liquidity review:</strong> combine <code>get_lease_due_status</code> with <code>get_cash_balance</code>, and stage a payment proposal for human review if policy and due-date checks support it.</li>
-    </ol>
-  </section>
-
-  <section style="margin:2rem 0">
-    <h3>6. Three problems that require system expansion</h3>
-    <ol>
-      <li><strong>Damaged-goods returns and customer refunds:</strong> the current records lack a returns/inspection workflow and inventory write-off tracking, and the payment controls are designed for approved shop disbursements rather than customer refunds. I would add return authorization, condition tracking, stock adjustment, and refund records with separate approval rules.</li>
-      <li><strong>Custom apparel production scheduling:</strong> existing inventory and pricing records cannot validate artwork or reserve print equipment and labor. I would add a production-job model, artwork validation, machine capacity, and due-date scheduling tools.</li>
-      <li><strong>Pop-up sales and cash-in reconciliation:</strong> the model records cash outflows but has no POS receipts, register deposits, or revenue reconciliation. I would add an audited receipt/deposit workflow and controls that reconcile register totals to bank deposits.</li>
-    </ol>
-  </section>
-
-  <section style="margin:2rem 0;background:#fff7ed;border-left:4px solid #ea580c;padding:1rem;border-radius:8px">
-    <h3>7. What I would fix before trusting “resolved”</h3>
-    <p>I would make ticket status evidence-based: Ticket 101 should remain open or awaiting fulfillment until stock is replenished and the order can be reserved; Ticket 103 should wait for the customer's discount target and a subsequent margin decision. Ticket 102 can be closed as paid, with its record explicitly saying the rent was paid two days before its due date. I would also add outcome checks that require a draft, purchase/order record, approval, and liability update to agree before a closure is accepted.</p>
-    <p>My central lesson is that this run demonstrated useful auditability and human payment controls, but it also exposed a dangerous gap between a successful tool sequence and a genuinely resolved customer problem. The system must represent uncertainty and waiting states honestly.</p>
-  </section>
-</div>
-</template>
-<script>
-(() => {
-  const populateReflection = () => {
-    const template = document.getElementById('reflection-postmortem-template');
-    if (!template) return;
-    const controls = Array.from(document.querySelectorAll('button, a, [role="tab"]'));
-    const control = controls.find((item) => item.textContent.trim().toLowerCase() === 'reflection');
-    let target = control && (control.getAttribute('data-target') || control.getAttribute('href') || control.getAttribute('aria-controls'));
-    if (!target && control) {
-      const onclick = control.getAttribute('onclick') || '';
-      const match = onclick.match(/[\"']([^\"']*reflection[^\"']*)[\"']/i);
-      if (match) target = match[1];
-    }
-    if (!target && control) {
-      const onclick = control.getAttribute('onclick') || '';
-      const match = onclick.match(/[\"']([^\"']*reflection[^\"']*)[\"']/i);
-      if (match) target = match[1];
-    }
-    let panel = null;
-    if (target) {
-      const selector = target.startsWith('#') ? target : `#${target}`;
-      try { panel = document.querySelector(selector); } catch (_) { panel = null; }
-    }
-    if (!panel) panel = Array.from(document.querySelectorAll('[id]:not(template)')).find((item) => item.id.toLowerCase().includes('reflection'));
-    if (!panel) {
-      const placeholder = Array.from(document.querySelectorAll('div, section, article')).find((item) => item.textContent.includes('Coming later in subsequent problems') && /reflection/i.test(item.id + ' ' + item.className));
-      panel = placeholder;
-    }
-    if (panel) panel.innerHTML = template.innerHTML;
-  };
-  if (document.readyState === 'loading') document.addEventListener('DOMContentLoaded', populateReflection, { once: true });
-  else populateReflection();
-})();
-</script>
-<script>
-(() => {
-  const template = document.getElementById('reflection-postmortem-template');
-  if (!template) return;
-  template.innerHTML = `
 <div class="reflection-container" style="max-width:900px;margin:0 auto;padding:24px;color:#1e293b;font-family:system-ui,-apple-system,sans-serif;line-height:1.65">
   <h2 style="font-size:1.5rem;font-weight:700;margin-bottom:16px;border-bottom:2px solid #e2e8f0;padding-bottom:10px">Post-Mortem: Campus Customs Multi-Agent Run</h2>
   <p style="background:#eff6ff;border-left:4px solid #2563eb;padding:12px 16px">I checked this against the database mapping and the successful run record. The real tickets do not match the first plan: <strong>102 is rent</strong>, and <strong>103 is the hoodie discount request</strong>. A database status of <code>resolved</code> also does not prove that a customer got their order or an agreed discount.</p>
@@ -375,7 +252,7 @@
     </article>
     <article style="background:#f8fafc;border:1px solid #e2e8f0;border-radius:8px;padding:16px;margin:12px 0">
       <strong>Ticket 102 — Lease rent | Score: 8/10</strong>
-      <p>This is where Facilities and Accounting did the right work. <code>desk.date_today</code> was <strong>2026-08-31</strong>; rent of <strong>$2,400</strong> was due <strong>2026-09-02</strong>, so it was due soon, not overdue. Facilities handed the liability to Accounting, Accounting staged a proposal, and a human approved it. The lease was marked paid and the Checking balance dropped by the same amount. The part I would challenge is timing: the system paid two days early without recording why early payment was preferable.</p>
+      <p>This is where Facilities and Accounting did the right work. <code>desk.date_today</code> was <strong>2026-08-31</strong>; rent of <strong>$2,400</strong> was due <strong>2026-09-02</strong>, so it was due soon, not overdue. Facilities handed the liability to Accounting, Accounting staged a proposal, and a human approved it. The lease was marked paid and Checking fell by $2,400. The agent used <code>desk.date_today</code> (2026-08-31) and classified the September 2 due date as upcoming. The payment row is timestamped 2026-10-08, so the simulated business date and runtime timestamp disagree; I cannot call this two days early without a defined clock policy.</p>
       <p style="margin-bottom:0"><strong>What I would fix:</strong> show “due soon” separately from “overdue,” and capture a reason for paying before the due date.</p>
     </article>
     <article style="background:#f8fafc;border:1px solid #e2e8f0;border-radius:8px;padding:16px;margin:12px 0">
@@ -426,9 +303,37 @@
 
   <section style="margin:24px 0;background:#fff7ed;border-left:4px solid #ea580c;padding:14px 18px">
     <h3 style="font-size:1.2rem;color:#0f172a">7. The fix I would ship before trusting “resolved”</h3>
-    <p style="margin-bottom:0">Require evidence for closure. Ticket 101 should wait for a recorded restock and reservation; Ticket 103 should wait for the customer’s target price and a margin decision. Ticket 102 can close as paid, with the record saying it was paid before its due date. The deployment got payment gating and cash reconciliation right, but it let a state label outrun the work. That is the bug I would fix first.</p>
+    <p style="margin-bottom:0">Require evidence for closure. Ticket 101 should wait for a recorded restock and reservation; Ticket 103 should wait for the customer’s target price and a margin decision. Ticket 102 can close as paid once the app defines how payment timestamps relate to the simulated shop date. The deployment got payment gating and cash reconciliation right, but it let a state label outrun the work. That is the bug I would fix first.</p>
   </section>
-</div>`;
+</div>
+</template>
+<script>
+(() => {
+  const populateReflection = () => {
+    const template = document.getElementById('reflection-postmortem-template');
+    if (!template) return;
+    const controls = Array.from(document.querySelectorAll('button, a, [role="tab"]'));
+    const control = controls.find((item) => item.textContent.trim().toLowerCase() === 'reflection');
+    let target = control && (control.getAttribute('data-target') || control.getAttribute('href') || control.getAttribute('aria-controls'));
+    if (!target && control) {
+      const onclick = control.getAttribute('onclick') || '';
+      const match = onclick.match(/[\"']([^\"']*reflection[^\"']*)[\"']/i);
+      if (match) target = match[1];
+    }
+    let panel = null;
+    if (target) {
+      const selector = target.startsWith('#') ? target : `#${target}`;
+      try { panel = document.querySelector(selector); } catch (_) { panel = null; }
+    }
+    if (!panel) panel = Array.from(document.querySelectorAll('[id]:not(template)')).find((item) => item.id.toLowerCase().includes('reflection'));
+    if (!panel) {
+      const placeholder = Array.from(document.querySelectorAll('div, section, article')).find((item) => item.textContent.includes('Coming later in subsequent problems') && /reflection/i.test(item.id + ' ' + item.className));
+      panel = placeholder;
+    }
+    if (panel) panel.innerHTML = template.innerHTML;
+  };
+  if (document.readyState === 'loading') document.addEventListener('DOMContentLoaded', populateReflection, { once: true });
+  else populateReflection();
 })();
 </script>
 </body>

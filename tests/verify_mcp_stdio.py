@@ -22,8 +22,15 @@ ROOT = Path(__file__).resolve().parents[1]
 DATABASE = ROOT / "data" / "campus_customs_new.db"
 REPORT = ROOT / "output" / "mcp_tool_test_results.json"
 EXPECTED_TOOLS = {
-    "check_inventory_stock", "check_vendor_restock_eligibility", "get_lease_due_status"
+    "check_inventory_stock", "check_vendor_restock_eligibility", "get_lease_due_status",
+    "get_ticket_details", "update_ticket_status", "get_cash_balance", "propose_payment",
+    "save_customer_draft", "get_pricing_and_margin",
 }
+READ_ONLY_TOOLS = {
+    "check_inventory_stock", "check_vendor_restock_eligibility", "get_lease_due_status",
+    "get_ticket_details", "get_cash_balance", "get_pricing_and_margin",
+}
+SMOKE_REPORT = ROOT / "output" / "mcp_smoke.json"
 
 
 def database_hashes() -> dict[str, str]:
@@ -40,7 +47,7 @@ def database_cases() -> tuple[list[dict[str, Any]], list[dict[str, Any]]]:
         conn.row_factory = sqlite3.Row
         stock_requests = conn.execute(
             "SELECT t.id, t.sku, t.size, t.qty FROM tickets t "
-            "WHERE t.status = 'open' AND t.sku IS NOT NULL ORDER BY t.id"
+            "WHERE t.sku IS NOT NULL ORDER BY t.id"
         ).fetchall()
         for ticket in stock_requests:
             arguments = {"sku": ticket["sku"], "size": ticket["size"], "order_quantity": ticket["qty"]}
@@ -53,6 +60,25 @@ def database_cases() -> tuple[list[dict[str, Any]], list[dict[str, Any]]]:
             expected["can_fulfill"] = bool(expected["can_fulfill"])
             cases.append({"name": f"ticket_{ticket['id']}_inventory", "tool": "check_inventory_stock",
                           "arguments": arguments, "expected": expected})
+
+        ticket_details = conn.execute(
+            "SELECT t.id, t.requester, t.type, t.subject, t.notes, t.sku, t.size, t.qty, "
+            "t.lease_id, t.invoice_id, i.vendor_id AS invoice_vendor_id, v.name AS invoice_vendor_name, "
+            "t.status, t.created_at, d.date_today AS shop_date "
+            "FROM tickets t CROSS JOIN desk d LEFT JOIN invoices i ON i.id = t.invoice_id "
+            "LEFT JOIN vendors v ON v.id = i.vendor_id ORDER BY t.id"
+        ).fetchall()
+        for row in ticket_details:
+            expected = {
+                "ticket_id": row["id"], "customer_id": row["requester"], "type": row["type"],
+                "subject": row["subject"], "description": row["notes"], "sku": row["sku"],
+                "size": row["size"], "quantity": row["qty"], "lease_id": row["lease_id"],
+                "invoice_id": row["invoice_id"], "invoice_vendor_id": row["invoice_vendor_id"],
+                "invoice_vendor_name": row["invoice_vendor_name"], "status": row["status"],
+                "created_at": row["created_at"], "shop_date": row["shop_date"],
+            }
+            cases.append({"name": f"ticket_{row['id']}_details", "tool": "get_ticket_details",
+                          "arguments": {"ticket_id": row["id"]}, "expected": expected})
 
         for vendor in conn.execute("SELECT * FROM vendors ORDER BY id").fetchall():
             expected = dict(conn.execute(
@@ -86,6 +112,25 @@ def database_cases() -> tuple[list[dict[str, Any]], list[dict[str, Any]]]:
             expected = dict(row)
             cases.append({"name": f"lease_{row['lease_id']}_due", "tool": "get_lease_due_status",
                           "arguments": {"lease_id": row["lease_id"]}, "expected": expected})
+
+        cash = conn.execute("SELECT name, balance, date FROM cash_accounts ORDER BY name LIMIT 1").fetchone()
+        cases.append({"name": "cash_balance_checking", "tool": "get_cash_balance",
+                      "arguments": {"account_name": "Operating Cash"},
+                      "expected": {"account_name": cash["name"], "balance": cash["balance"],
+                                   "as_of_date": cash["date"]}})
+
+        for row in conn.execute(
+            "SELECT DISTINCT p.sku, p.unit_cost, p.list_price FROM pricing p "
+            "JOIN tickets t ON t.sku = p.sku ORDER BY p.sku"
+        ):
+            margin = round(float(row["list_price"]) - float(row["unit_cost"]), 2)
+            expected = {
+                "sku": row["sku"], "unit_cost": row["unit_cost"], "list_price": row["list_price"],
+                "gross_margin_per_unit": margin,
+                "gross_margin_percent": round(margin / float(row["list_price"]) * 100, 2),
+            }
+            cases.append({"name": f"pricing_{row['sku']}", "tool": "get_pricing_and_margin",
+                          "arguments": {"sku": row["sku"]}, "expected": expected})
 
         missing_vendor = conn.execute("SELECT COALESCE(MAX(id), 0) + 1 FROM vendors").fetchone()[0]
         missing_lease = conn.execute("SELECT COALESCE(MAX(id), 0) + 1 FROM leases").fetchone()[0]
@@ -132,10 +177,11 @@ async def verify_protocol() -> dict[str, Any]:
                     result["server_info"] = initialized.serverInfo.model_dump(mode="json")
                     listed = await session.list_tools()
                     tools = {tool.name: tool for tool in listed.tools}
-                    assert len(listed.tools) == 3 and set(tools) == EXPECTED_TOOLS
+                    assert len(listed.tools) == 9 and set(tools) == EXPECTED_TOOLS
                     result["registered_tools"] = sorted(tools)
                     for tool in tools.values():
-                        assert tool.annotations and tool.annotations.readOnlyHint
+                        if tool.name in READ_ONLY_TOOLS:
+                            assert tool.annotations and tool.annotations.readOnlyHint
                         assert tool.outputSchema is not None
                     for case in cases:
                         response = await session.call_tool(case["tool"], case["arguments"])
@@ -167,6 +213,23 @@ def main() -> None:
     result = asyncio.run(bounded_verification())
     REPORT.parent.mkdir(parents=True, exist_ok=True)
     REPORT.write_text(json.dumps(result, indent=2, ensure_ascii=False) + "\n", encoding="utf-8")
+    smoke_names = {
+        "ticket_101_details", "ticket_102_details", "ticket_103_details",
+        "ticket_101_inventory", "ticket_103_inventory", "vendor_1_clearance",
+        "lease_1_due", "cash_balance_checking", "pricing_CC-TEE-WHITE",
+        "pricing_CC-HOOD-NAVY",
+    }
+    smoke_cases = [case for case in result["cases"] if case["name"] in smoke_names]
+    if {case["name"] for case in smoke_cases} != smoke_names:
+        raise AssertionError("The live MCP smoke snapshot is missing one or more expected shop queries.")
+    smoke = {
+        "status": result["status"], "checked_at": result["checked_at"],
+        "server_registration": result["server_registration"],
+        "database": "data/campus_customs_new.db", "transport": result["transport"],
+        "registered_tools": result["registered_tools"], "live_queries": smoke_cases,
+        "databases_unchanged": result["databases_unchanged"],
+    }
+    SMOKE_REPORT.write_text(json.dumps(smoke, indent=2, ensure_ascii=False) + "\n", encoding="utf-8")
     print(f"PASS: {len(result['registered_tools'])} MCP tools discovered through the configured stdio command.")
     print(f"PASS: {len(result['cases'])} complete outputs match SQL; {len(result['error_cases'])} invalid calls rejected.")
     print("PASS: both database hashes unchanged; MCP session closed.")

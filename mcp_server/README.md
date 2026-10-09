@@ -84,7 +84,7 @@ An isolated environment is available at `hw5/.venv`; run the acceptance checks f
 .\.venv\Scripts\python.exe -B -m unittest discover -s tests -p test_mcp_server.py -v
 ```
 
-The checks use the actual working database in its initial Q2 state, invoke FastMCP in process, verify tool schemas and error handling, and compare database hashes before and after; they do not create mock shop records or start a transport.
+The suite checks the submitted working copy and uses an isolated copy of the pristine database when it needs the original unpaid-invoice state. It verifies tool schemas and error handling, hashes both submitted databases before and after, and does not invent shop records or start a transport.
 
 ## MCP client registration (Problem 4)
 
@@ -103,8 +103,8 @@ Run the real MCP protocol verification from `hw5`:
 .\.venv\Scripts\python.exe -B tests/verify_mcp_stdio.py
 ```
 
-This loads the exact `.mcp.json` registration, starts its command in a child process, initializes an MCP session, discovers the three tools, and verifies returned JSON against independent read-only SQL queries.
-It also checks rejected inputs, verifies both database hashes, closes the child session, and writes `output/mcp_tool_test_results.json`.
+This loads the exact `.mcp.json` registration, starts its command in a child process, initializes an MCP session, discovers all nine tools, and verifies returned JSON against independent read-only SQL queries.
+It checks rejected inputs, verifies both database hashes, closes the child session, and writes `output/mcp_tool_test_results.json` plus the live-query snapshot `output/mcp_smoke.json`.
 
 ## Problem 5 extension: complete tool registry
 

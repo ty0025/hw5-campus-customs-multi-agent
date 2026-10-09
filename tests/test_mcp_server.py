@@ -1,11 +1,13 @@
-"""Acceptance checks against the real, initial Q2 working database, without a transport."""
+"""Acceptance checks use the working database and isolated pristine copies, without a transport."""
 
 from __future__ import annotations
 
 import hashlib
 import json
 import os
+import shutil
 import sqlite3
+import tempfile
 import unittest
 from datetime import date
 from pathlib import Path
@@ -23,6 +25,10 @@ class DatabaseGuard:
         self.paths = [server.PROJECT_ROOT / "data" / name for name in
                       ("campus_customs.db", "campus_customs_new.db")]
         self.before = {path: hashlib.sha256(path.read_bytes()).hexdigest() for path in self.paths}
+        self.fixture_dir = tempfile.TemporaryDirectory(prefix="hw5-mcp-tests-")
+        self.addCleanup(self.fixture_dir.cleanup)
+        self.pristine_fixture_path = Path(self.fixture_dir.name) / "campus_customs_new.db"
+        shutil.copyfile(self.paths[0], self.pristine_fixture_path)
         self.addCleanup(self.assert_databases_unchanged)
 
     def assert_databases_unchanged(self) -> None:
@@ -60,7 +66,8 @@ class ShopToolTests(DatabaseGuard, unittest.TestCase):
                 server.check_inventory_stock(sku, size, 1)
 
     def test_unpaid_invoice_blocks_vendor_with_actual_lead_time(self) -> None:
-        result = server.check_vendor_restock_eligibility(1)
+        with patch.object(server, "WORKING_DB_PATH", self.pristine_fixture_path):
+            result = server.check_vendor_restock_eligibility(1)
         self.assertTrue(result.blocked_by_unpaid_invoices)
         self.assertEqual((result.vendor_name, result.lead_days, result.total_unpaid),
                          ("Bulldog Print Co", 5, 840.0))
@@ -161,16 +168,17 @@ class McpContractTests(DatabaseGuard, unittest.IsolatedAsyncioTestCase):
              server.VendorRestockResult, "blocked_by_unpaid_invoices", True),
             ("get_lease_due_status", {"lease_id": 1}, server.LeaseDueResult, "days_until_due", 2),
         ]
-        for name, arguments, result_type, key, expected in cases:
-            with self.subTest(tool=name):
-                content, structured = await server.mcp.call_tool(name, arguments)
-                self.assertEqual(structured[key], expected)
-                self.assertEqual(json.loads(content[0].text), structured)
-                self.assertEqual(result_type.model_validate(structured).model_dump(mode="json"), structured)
+        with patch.object(server, "WORKING_DB_PATH", self.pristine_fixture_path):
+            for name, arguments, result_type, key, expected in cases:
+                with self.subTest(tool=name):
+                    content, structured = await server.mcp.call_tool(name, arguments)
+                    self.assertEqual(structured[key], expected)
+                    self.assertEqual(json.loads(content[0].text), structured)
+                    self.assertEqual(result_type.model_validate(structured).model_dump(mode="json"), structured)
 
-        ticket = server.get_ticket_details(101)
-        self.assertEqual((ticket.invoice_id, ticket.invoice_vendor_id, ticket.invoice_vendor_name),
-                         (501, 1, "Bulldog Print Co"))
+            ticket = server.get_ticket_details(101)
+            self.assertEqual((ticket.invoice_id, ticket.invoice_vendor_id, ticket.invoice_vendor_name),
+                             (501, 1, "Bulldog Print Co"))
 
     async def test_mcp_validation_rejects_coercion_and_missing_records(self) -> None:
         for quantity in [0, -1, 1.5, True, "1"]:

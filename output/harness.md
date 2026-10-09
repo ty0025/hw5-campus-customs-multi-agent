@@ -194,20 +194,26 @@ The Homework 5 root now contains `.mcp.json` with the exact requested registrati
 The module has a guarded stdio entry point and selects the existing project virtual environment when launched as a module; importing it still registers tools without starting a transport.
 Clients must use `hw5` as their project/working directory for this relative configuration.
 
-`tests/verify_mcp_stdio.py` loads this configuration unchanged, starts a real MCP subprocess, initializes a session, discovers exactly three tools, and compares complete structured outputs with independent read-only SQL queries.
+`tests/verify_mcp_stdio.py` loads this configuration unchanged, starts a real MCP subprocess, initializes a session, discovers all nine tools, and compares complete structured outputs with independent read-only SQL queries.
 Output JSON Schemas and the matching text representations are also checked.
 
 | Tool | Database cases verified | Result |
 | --- | --- | --- |
-| `check_inventory_stock` | Ticket 101: 0 available, 1 requested, shortfall 1; Ticket 103: 8 available, 20 requested, shortfall 12. | Both complete outputs match SQL. |
-| `check_vendor_restock_eligibility` | Vendor 1: 5-day lead time, invoice 501 unpaid for $840 and overdue by 3 days; vendors 2 and 3: no blocking invoices, lead times 3 and 1 days. | All three complete outputs match SQL. |
-| `get_lease_due_status` | Lease 1: rent $2,400, next due 2026-09-02, two days after shop date 2026-08-31. | Complete output matches SQL. |
+| `check_inventory_stock` | Tickets 101 and 103, including the 1-unit and 12-unit shortfalls. | Both structured outputs match SQL. |
+| `check_vendor_restock_eligibility` | All three vendors, their lead times, and invoice blockers against `desk.date_today`. | All three structured outputs match SQL. |
+| `get_lease_due_status` | Lease 1 and its business-date classification. | Structured output matches SQL. |
+| `get_ticket_details` | Tickets 101, 102, and 103, including actual invoice/vendor linkage. | All three structured outputs match SQL. |
+| `get_cash_balance` | Default `Operating Cash` mapping to the recorded checking account. | Structured output matches SQL. |
+| `get_pricing_and_margin` | Pricing rows linked to the open-ticket SKUs. | Both structured outputs match SQL. |
+| `update_ticket_status` | Input/output schemas and local-write annotation. | Discovered and schema-checked; not invoked in the read-only protocol run. |
+| `propose_payment` | Input/output schemas and local-write annotation. | Discovered and schema-checked; not invoked in the read-only protocol run. |
+| `save_customer_draft` | Input/output schemas and local-write annotation. | Discovered and schema-checked; not invoked in the read-only protocol run. |
 
-- Successful database comparisons: 6.
+- Successful read-only database comparisons: 12.
 - Invalid calls correctly rejected: 4 (zero order quantity, numeric-string quantity, unknown vendor, unknown lease).
 - Original and working database SHA-256 values are unchanged after all protocol calls.
 - The test closes the MCP session and its child process; it makes no AI calls and exposes no network endpoint.
-- Full actual/expected results are recorded in `output/mcp_tool_test_results.json`.
+- Full actual/expected results are recorded in `output/mcp_tool_test_results.json`; a concise live-query snapshot is also written to `output/mcp_smoke.json`.
 - These checks prove the configuration works with a real MCP client; they do not verify that a particular editor UI has imported and enabled it.
 
 ## Problem 5: Agent Team Roster

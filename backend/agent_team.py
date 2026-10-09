@@ -138,7 +138,7 @@ class AgentTeam:
         self.agents = {name: self._build_agent(name) for name in AGENTS}
 
     def _build_agent(self, agent_name: AgentName) -> Agent[AgentContext, AgentResult]:
-        prompt_file = self.project_root / "backend" / "prompts" / f"{agent_name.lower().replace(' ', '_')}.txt"
+        prompt_file = self.project_root / "backend" / "prompts" / f"{agent_name.lower().replace(' ', '_')}.md"
         system_prompt = prompt_file.read_text(encoding="utf-8")
         agent = Agent(
             self.model,
