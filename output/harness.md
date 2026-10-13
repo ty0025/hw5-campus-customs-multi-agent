@@ -194,7 +194,7 @@ The Homework 5 root now contains `.mcp.json` with the exact requested registrati
 The module has a guarded stdio entry point and selects the existing project virtual environment when launched as a module; importing it still registers tools without starting a transport.
 Clients must use `hw5` as their project/working directory for this relative configuration.
 
-`tests/verify_mcp_stdio.py` loads this configuration unchanged, starts a real MCP subprocess, initializes a session, discovers all nine tools, and compares complete structured outputs with independent read-only SQL queries.
+`tests/verify_mcp_stdio.py` loads this configuration unchanged, starts a real MCP subprocess, initializes a session, discovers all ten tools, and compares complete structured outputs with independent read-only SQL queries.
 Output JSON Schemas and the matching text representations are also checked.
 
 | Tool | Database cases verified | Result |
@@ -224,13 +224,13 @@ The five PydanticAI agents share a ticket-scoped runtime, can delegate across th
 | --- | --- |
 | **Boss** | Reads and triages each ticket, chooses only the specialists needed, combines their findings, sets a supported ticket status, and escalates unresolved blockers for staff or human approval. |
 | **Inventory** | Checks stock by SKU and size, calculates shortfalls, assesses recorded vendor candidates and lead times, and stops any restock blocked by an open unpaid vendor invoice until Accounting handles the obligation. |
-| **Accounting** | Checks cash, pricing margins, and vendor obligations; stages referenced payment proposals for human approval; never executes a payment or lets available cash become negative. |
+| **Accounting** | Checks cash, pricing margins, and vendor obligations; stages payment and purchase-order proposals for human review; alone has MCP write authority for these financial approval requests. |
 | **Facilities** | Reads lease terms and compares the next due date with `desk.date_today`; delegates due rent to Accounting for liquidity checks and proposal staging. |
 | **Customer Service** | Drafts accurate customer updates for fulfillment, backorders, and discount inquiries, saving them as local board drafts without sending them. |
 
 ## Problem 5: Complete MCP Tool Registry
 
-This nine-tool registry supersedes the historical Problem 3/4 description that listed three read-only tools. Every shop-data call made by these agents runs over FastMCP and reaches only `data/campus_customs_new.db`.
+This ten-tool registry supersedes the historical Problem 3/4 description that listed three read-only tools. Every shop-data call made by these agents runs over FastMCP and reaches only `data/campus_customs_new.db`.
 
 | MCP tool | Exact SQLite table(s) accessed | Operation |
 | --- | --- | --- |
@@ -241,10 +241,11 @@ This nine-tool registry supersedes the historical Problem 3/4 description that l
 | `update_ticket_status(ticket_id, status, resolution)` | `tickets` | Update the ticket status and append its resolution to the existing notes. |
 | `get_cash_balance(account_name="Operating Cash")` | `cash_accounts` | Read an account balance and its recorded date. |
 | `propose_payment(amount, recipient, reason, ref_id)` | `cash_accounts`, `approvals`; plus `invoices` or `leases` and `tickets` for a referenced obligation | Check cash/obligation facts and stage a referenced human approval in `approvals`; never write a completed payment to `payments`. An omitted reference returns an unstaged payload. |
+| `propose_purchase_order(ticket_id, sku, size, quantity, vendor_id, reason)` | `tickets`, `inventory`, `vendors`, `invoices`, `pricing`, `approvals`, `purchase_orders` | Revalidate exact shortfall, item cost, vendor specialty, ticket-linked supplier when present, and unpaid-invoice blocker; write only a pending request for human review. The approval endpoint records an internal staff handoff, not an external vendor order or cash debit. |
 | `save_customer_draft(ticket_id, draft_body)` | `tickets`, `customer_drafts` | Read the ticket recipient/subject and save an unsent local draft. |
 | `get_pricing_and_margin(sku)` | `pricing` | Read unit cost/list price and calculate gross margin. |
 
-Read tools use SQLite query-only mode. The three local-write tools are `update_ticket_status`, `propose_payment`, and `save_customer_draft`; none makes an external call.
+Read tools use SQLite query-only mode. The four local-write tools are `update_ticket_status`, `propose_payment`, `propose_purchase_order`, and `save_customer_draft`; none makes an external call.
 
 ## Safety & Guardrails
 
@@ -252,6 +253,7 @@ Read tools use SQLite query-only mode. The three local-write tools are `update_t
 
 - Every payment requires a human approval decision. Accounting stages only an obligation-linked proposal in `approvals`; the tool response reports `PENDING_APPROVAL` while the stored approval row remains `pending`.
 - `propose_payment` verifies the recorded invoice or lease amount and subtracts other pending proposals when checking available funds. It refuses a proposal when cash would fall below zero. A proposal never changes `cash_accounts`, marks an invoice or lease paid, or inserts a row into the completed `payments` ledger.
+- `propose_purchase_order` refuses a supplier with open unpaid invoices and does not create an order until a human approves the exact shortfall, supplier, quantity, and cost. Approval rechecks those facts and other pending cash commitments; it records an internal staff handoff only, while cash remains unchanged until an independently approved payment.
 - Only the existing human approval path can turn an approved request into a recorded payment; cash only flows out and no revenue is simulated.
 
 ### Customer Communication Guardrails
@@ -279,7 +281,9 @@ Observable analysis-start, delegation, MCP call, response-synthesis, completion,
 | `GET /api/tickets` | Returns the ticket board with current status, ticket details, local drafts, and approval cards. |
 | `POST /api/tickets/{ticket_id}/run` | Runs Boss and its bounded specialist delegations for one ticket; all model calls are fixed to `gpt-6-luna` through Portkey and all shop facts come through FastMCP. |
 | `GET /api/events` | Returns normalized recent events from the append-only audit trail. |
+| `GET /api/approvals` | Returns pending and recent completed payment/purchase-order requests from `approvals` for the dashboard. |
 | `POST /api/payments/approve` | Accepts a staged approval ID, validates recipient, amount, liability reference, and checking cash in one transaction, then records a `PAID` ledger row and marks the linked invoice or lease paid. A lease payment state is added to the working schema because the supplied `leases` table has no settlement field. |
+| `POST /api/purchase-orders/approve` | Rechecks vendor, invoice, stock, cost, and cash-commitment facts before recording an approved internal staff handoff; it does not contact the vendor or debit cash. |
 | `GET /api/cash/balance` | Reports the current checking/operating account balance. |
 | `POST /api/database/reset` | Replaces only `campus_customs_new.db` with the pristine original copy. |
 
@@ -289,13 +293,15 @@ If an approval fails validation or would reduce cash below zero, the endpoint ro
 
 `frontend/` is a React, Vite, and TypeScript single-page operator desk served at `http://localhost:5173` during local use. Its modular three-pane workspace keeps the inbound ticket stack at left, the agent collaboration transcript in the center, and pending human decisions with the financial ledger at right. The CSS uses the established Campus Customs blue palette and distinct identity colors for Boss, Inventory, Accounting, Facilities, and Customer Service.
 
-The dashboard reads tickets, event history, and checking cash from the REST routes; it polls the event feed while an agent run is active. A pending proposal remains a separate approval card with the payee, amount, reference, and projected balance. Approving it calls `POST /api/payments/approve`, then reloads cash and ticket state. Reset restores the working database and refreshes the operator view. Ticket messages remain board drafts, and the interface has no external send or vendor-call action.
+The dashboard reads tickets, event history, persisted approvals, and checking cash from the REST routes; it polls events and approvals while an agent run is active. Payments and purchase orders use separate review cards and approval routes. Payment approval refreshes cash and ticket state; purchase approval records an internal staff handoff without changing cash. Reset restores the working database and refreshes the operator view. Ticket messages remain board drafts, and the interface has no external send or vendor-call action.
 
 ## Problem 9: Resolution Run Evidence
 
 The synchronous runner in `scripts/resolve_all.py` resets the working copy from the untouched original, captures starting cash, calls the existing agent runner for Tickets 101–103 in sequence, uses the local FastMCP stdio server, and approves only staged proposals that match a recorded liability. It records exact tool names and delegation events from the audit trail, preserves the dashboard's pre-run Expected sections, writes the Actual and Cash results, and creates `output/resolved_tickets.json` plus `output/resolved_board.html`.
 
-Database numbering is authoritative for payment attribution: Ticket 101 is linked to invoice 501, Ticket 102 is linked to lease 1, and Ticket 103 is a hoodie discount request with no lease or invoice reference. Therefore cash movements and approval details must be assigned according to those stored relationships; the Q9 narrative's Ticket 102 invoice and Ticket 103 rent labels are recorded as a prompt/database mismatch rather than fabricated links. Final execution values and statuses are recorded here after the synchronous run and reconciled against SQL.
+Database numbering is authoritative for payment attribution: Ticket 101 is linked to invoice 501, Ticket 102 is linked to lease 1, and Ticket 103 is a hoodie discount request with no lease or invoice reference. Cash movements and approval details follow those stored references; Ticket 103 has no linked payable and is therefore assigned no cash outflow. Final execution values and statuses are recorded here after the synchronous run and reconciled against SQL.
+
+The three `output/ticket_101.png`, `output/ticket_102.png`, and `output/ticket_103.png` files are captures of the compiled React dashboard generated by `scripts/render_board_screenshots.py`. The one-shot renderer uses read-only database/audit snapshots in an offline HTML wrapper and launches only a synchronous headless browser; it starts no API/Vite server and makes no model calls.
 
 ### Synchronous resolution results
 

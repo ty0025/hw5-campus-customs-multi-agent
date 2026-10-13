@@ -5,8 +5,10 @@ from __future__ import annotations
 import asyncio
 import hashlib
 import json
+import os
 import shutil
 import sqlite3
+import sys
 import tempfile
 from contextlib import closing
 from datetime import datetime, timedelta, timezone
@@ -24,13 +26,19 @@ REPORT = ROOT / "output" / "mcp_tool_test_results.json"
 EXPECTED_TOOLS = {
     "check_inventory_stock", "check_vendor_restock_eligibility", "get_lease_due_status",
     "get_ticket_details", "update_ticket_status", "get_cash_balance", "propose_payment",
-    "save_customer_draft", "get_pricing_and_margin",
+    "save_customer_draft", "get_pricing_and_margin", "propose_purchase_order",
 }
 READ_ONLY_TOOLS = {
     "check_inventory_stock", "check_vendor_restock_eligibility", "get_lease_due_status",
     "get_ticket_details", "get_cash_balance", "get_pricing_and_margin",
 }
 SMOKE_REPORT = ROOT / "output" / "mcp_smoke.json"
+SMOKE_PROMPTS = {
+    "ticket_101_inventory": "For Ticket 101, check whether one CC-TEE-WHITE in size S is on hand and report the shortfall.",
+    "ticket_103_inventory": "For Ticket 103, check whether twenty CC-HOOD-NAVY hoodies in size M are on hand and report the shortfall.",
+    "vendor_1_clearance": "For the vendor linked to Ticket 101's unpaid invoice, check its lead time and whether an unpaid invoice blocks shipments.",
+    "lease_1_due": "For Ticket 102, compare lease 1's next rent date with desk.date_today and return its due status.",
+}
 
 
 def database_hashes() -> dict[str, str]:
@@ -154,14 +162,24 @@ async def verify_protocol() -> dict[str, Any]:
     assert registration == {
         "command": "python", "args": ["-m", "mcp_server.server"], "env": {"PYTHONPATH": "."}
     }, "The MCP registration differs from the supplied configuration."
-    parameters = StdioServerParameters(**registration, cwd=ROOT)
+    # Keep .mcp.json as the exact client registration while ensuring this
+    # standalone verifier resolves its plain `python` command to the project venv.
+    project_python = ROOT / ".venv" / "Scripts" / "python.exe"
+    # The stdio verifier must use an actual interpreter even when the Windows
+    # Store execution alias occupies the system-level `python` command name.
+    command = str(project_python) if project_python.is_file() else (shutil.which(registration["command"]) or sys.executable)
+    safe_env = {key: os.environ[key] for key in ("PATH", "SYSTEMROOT", "WINDIR", "TEMP", "TMP", "LANG", "LC_ALL") if key in os.environ}
+    child_env = {**safe_env, **registration.get("env", {})}
+    parameters = StdioServerParameters(
+        command=command, args=registration["args"], env=child_env, cwd=ROOT
+    )
     before = database_hashes()
     cases, error_cases = database_cases()
     result: dict[str, Any] = {
         "checked_at": datetime.now(timezone(timedelta(hours=8))).isoformat(timespec="seconds"),
         "server_registration": "campus_customs_mcp",
         "configuration": registration,
-        "configured_python_resolution": shutil.which(registration["command"]),
+        "configured_python_resolution": command,
         "working_directory": str(ROOT),
         "transport": "stdio",
         "verification_method": "Independent read-only SQL compared with real MCP subprocess responses",
@@ -170,33 +188,40 @@ async def verify_protocol() -> dict[str, Any]:
     }
     try:
         with tempfile.TemporaryFile(mode="w+", encoding="utf-8") as server_stderr:
-            async with stdio_client(parameters, errlog=server_stderr) as (read, write):
-                async with ClientSession(read, write, read_timeout_seconds=timedelta(seconds=20)) as session:
-                    initialized = await session.initialize()
-                    result["protocol_version"] = initialized.protocolVersion
-                    result["server_info"] = initialized.serverInfo.model_dump(mode="json")
-                    listed = await session.list_tools()
-                    tools = {tool.name: tool for tool in listed.tools}
-                    assert len(listed.tools) == 9 and set(tools) == EXPECTED_TOOLS
-                    result["registered_tools"] = sorted(tools)
-                    for tool in tools.values():
-                        if tool.name in READ_ONLY_TOOLS:
-                            assert tool.annotations and tool.annotations.readOnlyHint
-                        assert tool.outputSchema is not None
-                    for case in cases:
-                        response = await session.call_tool(case["tool"], case["arguments"])
-                        assert not response.isError, f"{case['name']} returned an MCP error."
-                        actual = response.structuredContent
-                        assert actual is not None, f"{case['name']} is missing structured output."
-                        validate(instance=actual, schema=tools[case["tool"]].outputSchema)
-                        text_results = [json.loads(block.text) for block in response.content if block.type == "text"]
-                        assert text_results == [actual], f"{case['name']} has inconsistent text and JSON output."
-                        assert actual == case["expected"], f"{case['name']} differs from the database."
-                        result["cases"].append({**case, "actual": actual, "matches_database": True})
-                    for case in error_cases:
-                        response = await session.call_tool(case["tool"], case["arguments"])
-                        assert response.isError, f"{case['name']} was incorrectly accepted."
-                        result["error_cases"].append({**case, "is_error": True})
+            try:
+                async with stdio_client(parameters, errlog=server_stderr) as (read, write):
+                    async with ClientSession(read, write, read_timeout_seconds=timedelta(seconds=20)) as session:
+                        initialized = await session.initialize()
+                        result["protocol_version"] = initialized.protocolVersion
+                        result["server_info"] = initialized.serverInfo.model_dump(mode="json")
+                        listed = await session.list_tools()
+                        tools = {tool.name: tool for tool in listed.tools}
+                        assert len(listed.tools) == 10 and set(tools) == EXPECTED_TOOLS
+                        result["registered_tools"] = sorted(tools)
+                        for tool in tools.values():
+                            if tool.name in READ_ONLY_TOOLS:
+                                assert tool.annotations and tool.annotations.readOnlyHint
+                            assert tool.outputSchema is not None
+                        for case in cases:
+                            response = await session.call_tool(case["tool"], case["arguments"])
+                            assert not response.isError, f"{case['name']} returned an MCP error."
+                            actual = response.structuredContent
+                            assert actual is not None, f"{case['name']} is missing structured output."
+                            validate(instance=actual, schema=tools[case["tool"]].outputSchema)
+                            text_results = [json.loads(block.text) for block in response.content if block.type == "text"]
+                            assert text_results == [actual], f"{case['name']} has inconsistent text and JSON output."
+                            assert actual == case["expected"], f"{case['name']} differs from the database."
+                            result["cases"].append({**case, "actual": actual, "matches_database": True})
+                        for case in error_cases:
+                            response = await session.call_tool(case["tool"], case["arguments"])
+                            assert response.isError, f"{case['name']} was incorrectly accepted."
+                            result["error_cases"].append({**case, "is_error": True})
+            except BaseException:
+                server_stderr.seek(0)
+                diagnostic = server_stderr.read()
+                if diagnostic:
+                    print("FastMCP subprocess stderr:", diagnostic)
+                raise
     finally:
         after = database_hashes()
         assert before == after, "A database changed during MCP protocol verification."
@@ -227,6 +252,10 @@ def main() -> None:
         "server_registration": result["server_registration"],
         "database": "data/campus_customs_new.db", "transport": result["transport"],
         "registered_tools": result["registered_tools"], "live_queries": smoke_cases,
+        "verification_prompts": {
+            case["name"]: SMOKE_PROMPTS[case["name"]]
+            for case in smoke_cases if case["name"] in SMOKE_PROMPTS
+        },
         "databases_unchanged": result["databases_unchanged"],
     }
     SMOKE_REPORT.write_text(json.dumps(smoke, indent=2, ensure_ascii=False) + "\n", encoding="utf-8")

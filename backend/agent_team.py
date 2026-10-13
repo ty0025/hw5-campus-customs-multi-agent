@@ -31,6 +31,7 @@ MCP_TOOL_NAMES = frozenset({
     "update_ticket_status",
     "get_cash_balance",
     "propose_payment",
+    "propose_purchase_order",
     "save_customer_draft",
     "get_pricing_and_margin",
 })
@@ -52,6 +53,7 @@ Available contracts:
 - update_ticket_status: {ticket_id, status, resolution}
 - get_cash_balance: {account_name}; omit account_name to use the server default.
 - propose_payment: {amount, recipient, reason, ref_id}; ref_id must be invoice:<id> or lease:<id> to stage.
+- propose_purchase_order: {ticket_id, sku, size, quantity, vendor_id, reason}; stage only an exact stock shortfall, after all vendor invoice blockers are cleared.
 - save_customer_draft: {ticket_id, draft_body}
 - get_pricing_and_margin: {sku}
 Only these tools are accepted; never access the database outside FastMCP.
@@ -246,6 +248,16 @@ class AgentTeam:
                 depth=context.depth,
             )
             raise ValueError(f"Tool {tool_name!r} is not on the fixed FastMCP allowlist.")
+        if tool_name in {"propose_payment", "propose_purchase_order"} and context.active_agent != "Accounting":
+            self.audit.append(
+                ticket_id=context.ticket_id,
+                agent_name=context.active_agent,
+                action="error",
+                tool_called=tool_name,
+                reasoning_notes="Rejected a financial approval request from an agent outside Accounting's write scope.",
+                depth=context.depth,
+            )
+            raise PermissionError("Only Accounting may stage payment or purchase-order approvals.")
         if self.mcp_calls >= MAX_MCP_CALLS_PER_TICKET:
             self.audit.append(
                 ticket_id=context.ticket_id,

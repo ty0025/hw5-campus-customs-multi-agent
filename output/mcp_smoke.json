@@ -1,6 +1,6 @@
 {
   "status": "PASS",
-  "checked_at": "2026-10-09T09:23:59+08:00",
+  "checked_at": "2026-10-14T03:48:09+08:00",
   "server_registration": "campus_customs_mcp",
   "database": "data/campus_customs_new.db",
   "transport": "stdio",
@@ -12,6 +12,7 @@
     "get_pricing_and_margin",
     "get_ticket_details",
     "propose_payment",
+    "propose_purchase_order",
     "save_customer_draft",
     "update_ticket_status"
   ],
@@ -323,5 +324,11 @@
       "matches_database": true
     }
   ],
+  "verification_prompts": {
+    "ticket_101_inventory": "For Ticket 101, check whether one CC-TEE-WHITE in size S is on hand and report the shortfall.",
+    "ticket_103_inventory": "For Ticket 103, check whether twenty CC-HOOD-NAVY hoodies in size M are on hand and report the shortfall.",
+    "vendor_1_clearance": "For the vendor linked to Ticket 101's unpaid invoice, check its lead time and whether an unpaid invoice blocks shipments.",
+    "lease_1_due": "For Ticket 102, compare lease 1's next rent date with desk.date_today and return its due status."
+  },
   "databases_unchanged": true
 }

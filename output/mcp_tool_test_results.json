@@ -1,5 +1,5 @@
 {
-  "checked_at": "2026-10-09T09:23:59+08:00",
+  "checked_at": "2026-10-14T03:48:09+08:00",
   "server_registration": "campus_customs_mcp",
   "configuration": {
     "command": "python",
@@ -11,7 +11,7 @@
       "PYTHONPATH": "."
     }
   },
-  "configured_python_resolution": "C:\\Users\\david\\AppData\\Local\\Microsoft\\WindowsApps\\python.EXE",
+  "configured_python_resolution": "C:\\Users\\david\\Desktop\\Courses\\my-app\\hw5\\.venv\\Scripts\\python.exe",
   "working_directory": "C:\\Users\\david\\Desktop\\Courses\\my-app\\hw5",
   "transport": "stdio",
   "verification_method": "Independent read-only SQL compared with real MCP subprocess responses",
@@ -433,6 +433,7 @@
     "get_pricing_and_margin",
     "get_ticket_details",
     "propose_payment",
+    "propose_purchase_order",
     "save_customer_draft",
     "update_ticket_status"
   ],

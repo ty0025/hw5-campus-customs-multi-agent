@@ -55,6 +55,7 @@ interface AgentEvent {
 
 interface PaymentProposal {
   identity: string;
+  kind: "payment" | "purchase_order";
   payment_id: number | null;
   amount: number;
   recipient: string;
@@ -62,13 +63,19 @@ interface PaymentProposal {
   reference_type: string;
   reference_id: number | null;
   ticket_id: number;
-  status: "PENDING_APPROVAL" | "PAID";
+  status: "PENDING_APPROVAL" | "PAID" | "APPROVED";
+  sku?: string | null;
+  size?: string | null;
+  quantity?: number | null;
+  lead_days?: number | null;
 }
 
 interface ApprovalResult {
   status: string;
-  payment_id: number;
-  payment_status: string;
+  payment_id?: number;
+  payment_status?: string;
+  purchase_order_id?: number;
+  cash_changed?: boolean;
   balance: number;
 }
 
@@ -167,6 +174,7 @@ function collectPaymentProposals(value: unknown, ticketId: number): PaymentPropo
         ].join(":");
         discovered.push({
           identity,
+          kind: "payment",
           payment_id: paymentId,
           amount,
           recipient,
@@ -212,7 +220,7 @@ function loadPendingPayments(): PaymentProposal[] {
         && typeof row?.amount === "number"
         && typeof row?.recipient === "string"
         && typeof row?.ticket_id === "number";
-    });
+    }).map((item) => ({ ...item, kind: item.kind === "purchase_order" ? "purchase_order" as const : "payment" as const }));
   } catch {
     return [];
   }
@@ -228,6 +236,11 @@ function formatTime(value?: string | null): string {
   const date = new Date(value);
   if (Number.isNaN(date.getTime())) return value;
   return new Intl.DateTimeFormat("en-US", { hour: "numeric", minute: "2-digit", second: "2-digit" }).format(date);
+}
+
+function initialTicketFromLocation(): number {
+  const requested = Number(new URLSearchParams(window.location.search).get("ticket"));
+  return requested === 101 || requested === 102 || requested === 103 ? requested : 101;
 }
 
 async function apiRequest<T>(path: string, options?: RequestInit): Promise<T> {
@@ -250,7 +263,7 @@ function App() {
   const [tickets, setTickets] = useState<Ticket[]>([]);
   const [events, setEvents] = useState<AgentEvent[]>([]);
   const [eventFloor, setEventFloor] = useState<number | null>(null);
-  const [selectedTicketId, setSelectedTicketId] = useState(101);
+  const [selectedTicketId, setSelectedTicketId] = useState(initialTicketFromLocation);
   const [completedTicketIds, setCompletedTicketIds] = useState<Set<number>>(new Set());
   const [approvalNotes, setApprovalNotes] = useState<Record<number, string>>({});
   const [balance, setBalance] = useState<number | null>(null);
@@ -284,13 +297,46 @@ function App() {
     return visibleRows;
   }, [eventFloor]);
 
+  const refreshApprovals = useCallback(async () => {
+    const rows = await apiRequest<Array<Record<string, unknown>>>('/api/approvals?limit=200');
+    const approvals: PaymentProposal[] = rows.flatMap((row) => {
+      const approvalId = parseId(row.approval_id ?? row.payment_id);
+      const ticketId = parseId(row.ticket_id);
+      const amount = Number(row.amount);
+      const kind = textValue(row.kind).toLowerCase() === 'purchase_order' ? 'purchase_order' : 'payment';
+      const recipient = textValue(row.recipient);
+      if (approvalId == null || ticketId == null || !Number.isFinite(amount) || amount <= 0 || !recipient) return [];
+      const state = textValue(row.status).toUpperCase();
+      const identity = `${kind}:${approvalId}`;
+      return [{
+        identity,
+        kind,
+        payment_id: approvalId,
+        amount,
+        recipient,
+        reason: textValue(row.reason) || (kind === 'purchase_order' ? 'Purchase order for staff review' : 'Payment proposal'),
+        reference_type: textValue(row.reference_type),
+        reference_id: parseId(row.reference_id),
+        ticket_id: ticketId,
+        status: state === 'PENDING_APPROVAL' ? 'PENDING_APPROVAL' : state === 'PAID' ? 'PAID' : 'APPROVED',
+        sku: row.sku == null ? null : textValue(row.sku),
+        size: row.size == null ? null : textValue(row.size),
+        quantity: row.quantity == null ? null : parseId(row.quantity),
+        lead_days: row.lead_days == null ? null : parseId(row.lead_days),
+      }];
+    });
+    setPendingPayments(approvals.filter((row) => row.status === 'PENDING_APPROVAL'));
+    setApprovedPayments(approvals.filter((row) => row.status !== 'PENDING_APPROVAL'));
+    return approvals;
+  }, []);
+
   useEffect(() => {
     window.localStorage.setItem("campus-customs-pending-payments", JSON.stringify(pendingPayments));
   }, [pendingPayments]);
 
   useEffect(() => {
     let mounted = true;
-    Promise.all([refreshTickets(), refreshBalance(), refreshEvents()])
+    Promise.all([refreshTickets(), refreshBalance(), refreshEvents(), refreshApprovals()])
       .catch((reason: unknown) => {
         if (mounted) setError(reason instanceof Error ? reason.message : "Could not connect to the operations API.");
       })
@@ -298,17 +344,17 @@ function App() {
         if (mounted) setLoading(false);
       });
     return () => { mounted = false; };
-  }, [refreshBalance, refreshEvents, refreshTickets]);
+  }, [refreshApprovals, refreshBalance, refreshEvents, refreshTickets]);
 
   useEffect(() => {
     if (activeRunTicket === null) return;
     const timer = window.setInterval(() => {
-      void refreshEvents().catch((reason: unknown) => {
+      void Promise.all([refreshEvents(), refreshApprovals()]).catch((reason: unknown) => {
         setError(reason instanceof Error ? reason.message : "Could not refresh agent activity.");
       });
     }, 900);
     return () => window.clearInterval(timer);
-  }, [activeRunTicket, refreshEvents]);
+  }, [activeRunTicket, refreshApprovals, refreshEvents]);
 
   const selectedTicket = tickets.find((ticket) => ticket.ticket_id === selectedTicketId);
   const ticketEvents = useMemo(
@@ -338,13 +384,15 @@ function App() {
       setPendingPayments((current) => mergeProposals(current, outputProposals));
       const summary = displaySummary(result.resolution ?? result.summary);
       setNotice(summary || `Ticket ${ticketId} has completed its agent run.`);
-      const [latestEvents] = await Promise.all([refreshEvents(), refreshTickets()]);
+      const [latestEvents, , latestApprovals] = await Promise.all([refreshEvents(), refreshTickets(), refreshApprovals()]);
       const traceProposals = latestEvents.flatMap((event) =>
         event.ticket_id == null || !event.timestamp || new Date(event.timestamp).getTime() < runStartedAt
           ? []
           : collectPaymentProposals(event, event.ticket_id)
       );
-      const hasPendingApproval = [...outputProposals, ...traceProposals, ...pendingPayments]
+      const hasPendingApproval = latestApprovals.some(
+        (proposal) => proposal.ticket_id === ticketId && proposal.status === "PENDING_APPROVAL"
+      ) || [...outputProposals, ...traceProposals]
         .some((proposal) => proposal.ticket_id === ticketId && proposal.status === "PENDING_APPROVAL");
       if (!hasPendingApproval) {
         setCompletedTicketIds((current) => new Set(current).add(ticketId));
@@ -365,26 +413,35 @@ function App() {
     setNotice("");
     setApprovingIdentity(proposal.identity);
     try {
-      const result = await apiRequest<ApprovalResult>("/api/payments/approve", {
-        method: "POST",
-        body: JSON.stringify({
-          payment_id: proposal.payment_id,
-          amount: proposal.amount,
-          recipient: proposal.recipient,
-          reference_type: proposal.reference_type,
-          reference_id: proposal.reference_id
-        })
-      });
-      setPendingPayments((current) => current.map((item) =>
-        item.identity === proposal.identity ? { ...item, status: "PAID" } : item
-      ));
-      setApprovedPayments((current) => [{ ...proposal, status: "PAID" }, ...current]);
+      const isPurchaseOrder = proposal.kind === "purchase_order";
+      const result = await apiRequest<ApprovalResult>(
+        isPurchaseOrder ? "/api/purchase-orders/approve" : "/api/payments/approve",
+        {
+          method: "POST",
+          body: JSON.stringify(isPurchaseOrder
+            ? { approval_id: proposal.payment_id, approved_by: "Desk Operator" }
+            : {
+                payment_id: proposal.payment_id,
+                amount: proposal.amount,
+                recipient: proposal.recipient,
+                reference_type: proposal.reference_type,
+                reference_id: proposal.reference_id
+              })
+        }
+      );
+      const approvedStatus = isPurchaseOrder ? "APPROVED" : "PAID";
+      setPendingPayments((current) => current.filter((item) => item.identity !== proposal.identity));
+      setApprovedPayments((current) => [{ ...proposal, status: approvedStatus }, ...current.filter((item) => item.identity !== proposal.identity)]);
       setApprovalNotes((current) => ({
         ...current,
-        [proposal.ticket_id]: `Payment approved · ${formatCurrency(proposal.amount)} recorded; follow-up may continue.`
+        [proposal.ticket_id]: isPurchaseOrder
+          ? `Purchase order approved for staff handoff; no vendor contact or shipment is claimed.`
+          : `Payment approved · ${formatCurrency(proposal.amount)} recorded; follow-up may continue.`
       }));
-      setNotice(`Disbursement recorded. New checking balance: ${formatCurrency(result.balance)}.`);
-      await Promise.all([refreshBalance(), refreshTickets(), refreshEvents()]);
+      setNotice(isPurchaseOrder
+        ? `Purchase order approved for internal staff handoff. Checking balance remains ${formatCurrency(result.balance)}.`
+        : `Disbursement recorded. New checking balance: ${formatCurrency(result.balance)}.`);
+      await Promise.all([refreshBalance(), refreshTickets(), refreshEvents(), refreshApprovals()]);
     } catch (reason) {
       setError(reason instanceof Error ? reason.message : "Payment approval failed.");
     } finally {
@@ -405,7 +462,7 @@ function App() {
       setApprovalNotes({});
       setEventFloor(Date.now());
       setEvents([]);
-      await Promise.all([refreshTickets(), refreshBalance()]);
+      await Promise.all([refreshTickets(), refreshBalance(), refreshApprovals()]);
       setNotice(result.message);
     } catch (reason) {
       setError(reason instanceof Error ? reason.message : "Database reset failed.");
@@ -613,20 +670,21 @@ function App() {
                     const canApprove = proposal.payment_id != null && proposal.reference_id != null && Boolean(proposal.reference_type);
                     return (
                       <div className="approval-card" key={proposal.identity}>
-                        <div className="approval-topline"><span className="approval-alert"><Clock3 size={13} /> PENDING YOUR REVIEW</span><span className="pending-dot" /></div>
+                        <div className="approval-topline"><span className="approval-alert"><Clock3 size={13} /> {proposal.kind === "purchase_order" ? "PURCHASE ORDER · YOUR REVIEW" : "PAYMENT · YOUR REVIEW"}</span><span className="pending-dot" /></div>
                         <div className="approval-amount">{formatCurrency(proposal.amount)}</div>
-                        <div className="approval-payee"><span className="payee-icon"><Banknote size={15} /></span><span><small>PAY TO</small><strong>{proposal.recipient}</strong></span></div>
+                        <div className="approval-payee"><span className="payee-icon">{proposal.kind === "purchase_order" ? <Box size={15} /> : <Banknote size={15} />}</span><span><small>{proposal.kind === "purchase_order" ? "VENDOR CANDIDATE" : "PAY TO"}</small><strong>{proposal.recipient}</strong></span></div>
                         <div className="approval-reason"><span>Purpose</span><strong>{proposal.reason}</strong></div>
+                        {proposal.kind === "purchase_order" && proposal.sku && <div className="approval-reason"><span>Order details</span><strong>{proposal.quantity} × {proposal.sku} / {proposal.size}; {proposal.lead_days}-day recorded lead</strong></div>}
                         <div className="approval-reason"><span>{proposal.reference_type ? `${proposal.reference_type} reference` : "Reference"}</span><strong>{proposal.reference_id ?? "Awaiting reference ID"}</strong></div>
-                        <div className="balance-impact"><span><ArrowDownRight size={15} /> Balance after approval</span><strong>{balance == null ? "—" : formatCurrency(balance - proposal.amount)}</strong></div>
+                        <div className="balance-impact"><span><ArrowDownRight size={15} /> {proposal.kind === "purchase_order" ? "Cash on approval" : "Balance after approval"}</span><strong>{balance == null ? "—" : formatCurrency(proposal.kind === "purchase_order" ? balance : balance - proposal.amount)}</strong></div>
                         <button
                           className="approve-button"
                           onClick={() => void handleApprove(proposal)}
                           disabled={!canApprove || approvingIdentity !== null || activeRunTicket !== null}
-                          title={!canApprove ? "The agent trace did not include the staged payment ID and reference required by the approval API." : "Approve and record this disbursement"}
+                          title={!canApprove ? "The approval is missing its stored reference details." : proposal.kind === "purchase_order" ? "Approve the internal purchase handoff; no supplier contact will be made" : "Approve and record this disbursement"}
                         >
                           {approvingIdentity === proposal.identity ? <Loader2 className="spin" size={16} /> : <Check size={16} />}
-                          Approve disbursement
+                          {proposal.kind === "purchase_order" ? "Approve purchase order" : "Approve disbursement"}
                         </button>
                         {!canApprove && <p className="approval-missing">The proposal is visible, but approval details are incomplete in the agent trace.</p>}
                       </div>
@@ -648,7 +706,7 @@ function App() {
                     <div className="approved-row" key={payment.identity}>
                       <span className="approved-check"><Check size={12} /></span>
                       <span><strong>{payment.recipient}</strong><small>Ticket {payment.ticket_id} · {payment.reason}</small></span>
-                      <b>−{formatCurrency(payment.amount)}</b>
+                      <b>{payment.kind === "purchase_order" ? "NO DEBIT" : `−${formatCurrency(payment.amount)}`}</b>
                     </div>
                   ))}
                 </div>

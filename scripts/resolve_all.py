@@ -448,7 +448,7 @@ def write_cash_tab(source: str, starting_cash: float, cash_rows: list[dict[str, 
     html_block = (
         '<div class="cash-ledger"><p class="mapping-alert"><strong>Database mapping note:</strong> '
         'Invoice 501 belongs to Ticket 101; lease 1 belongs to Ticket 102; Ticket 103 is a hoodie discount request. '
-        'The assignment text swaps these ticket numbers, so this ledger attributes cash by the actual database links.</p>'
+        'The invoice 501 and lease 1 cash movements are attributed to the tickets that actually reference them in the database.</p>'
         '<table><thead><tr><th>Item</th><th>Reference</th><th>Cash change (USD)</th></tr></thead><tbody>'
         f'<tr><th>Starting Checking Balance</th><td>Post-reset balance</td><td class="amount">{starting_cash:,.2f}</td></tr>'
         f'{rows}<tr class="ending"><th>Ending Checking Balance</th><td>Verified against cash_accounts</td><td class="amount">{ending_cash:,.2f}</td></tr>'
@@ -493,7 +493,7 @@ def build_resolved_board(tickets: list[dict[str, Any]], starting_cash: float, en
             f'<p class="outcome">{html.escape(ticket["outcome"])}</p><section><h3>Specialist contributions</h3><ul class="contributors">{contributions}</ul></section>'
             f'<section><h3>Approved disbursements</h3>{pay_html}</section>'
             f'<section class="chain"><h3>Delegation</h3><p>{html.escape(" · ".join(ticket["delegation_chain"]) or "Boss handled the ticket without specialist handoff")}</p></section>'
-            f'<figure><img src="ticket_{ticket_id}.png" alt="Ticket {ticket_id} screenshot" /><figcaption>Optional local screenshot: ticket_{ticket_id}.png</figcaption></figure></article>'
+            f'<figure><img src="ticket_{ticket_id}.png" alt="Ticket {ticket_id} React dashboard snapshot" /><figcaption>React dashboard snapshot, rendered offline from the saved resolved-state data.</figcaption></figure></article>'
         )
     return f'''<!doctype html>
 <html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1">
@@ -507,7 +507,7 @@ main{{max-width:1440px;padding:30px 24px 54px;margin:auto}}.mapping{{padding:13p
 section{{border-top:1px solid #edf2f7;padding-top:14px;margin-top:15px}}h3{{margin:0 0 9px;font-size:11px;letter-spacing:.1em;text-transform:uppercase;color:#56708e}}.contributors{{list-style:none;padding:0;margin:0;display:grid;gap:10px}}.contributors li{{display:grid;gap:3px;padding-left:11px;border-left:3px solid #60a5fa}}.contributors b{{color:#173b66;font-size:12px}}.contributors span{{color:#64748b;font-size:12px;line-height:1.45}}.payment{{display:grid;grid-template-columns:1fr auto;gap:2px 10px;align-items:center;padding:11px;background:#f0fdf4;border:1px solid #bbf7d0;border-radius:11px}}.payment strong{{color:#047857}}.payment small{{grid-column:1/-1;color:#64748b}}.payment.none{{display:block;background:#f8fafc;border-color:#e2e8f0;color:#64748b}}.chain p{{color:#475569;font-size:12px;margin:0}}figure{{margin:16px 0 0;background:#f8fbff;border:1px dashed #cbd9e8;border-radius:12px;padding:10px}}figure img{{display:block;width:100%;height:150px;object-fit:contain;color:#94a3b8;font-size:12px}}figcaption{{font-size:10px;color:#94a3b8;margin-top:5px}}
 footer{{text-align:center;color:#8090a5;font-size:12px;padding:26px}}@media(max-width:1050px){{.grid{{grid-template-columns:1fr 1fr}}}}@media(max-width:700px){{header{{padding-top:30px}}.grid{{grid-template-columns:1fr}}main{{padding:20px 14px 36px}}.ticket-card{{padding:18px}}}}
 </style></head><body><header><p class="eyebrow">LOCAL OPERATIONS RECORD</p><h1>Resolved ticket board</h1><p>Agent work, human approvals, and the reconciled checking balance.</p><div class="metrics"><div class="metric"><span>Starting checking</span><strong>${starting_cash:,.2f}</strong></div><div class="metric"><span>Approved disbursements</span><strong>${starting_cash-ending_cash:,.2f}</strong></div><div class="metric"><span>Ending checking</span><strong>${ending_cash:,.2f}</strong></div></div></header>
-<main><div class="mapping"><strong>Database mapping:</strong> Ticket 101 owns invoice 501; Ticket 102 owns lease 1; Ticket 103 is the hoodie discount request. The assignment's vendor and rent ticket numbers differ from the actual links.</div><div class="grid">{"".join(cards)}</div></main><footer>Campus Customs · Local simulation · Drafts remain unsent; no real vendor or customer was contacted.</footer></body></html>'''
+<main><div class="mapping"><strong>Database mapping:</strong> Ticket 101 owns invoice 501; Ticket 102 owns lease 1; Ticket 103 is the hoodie discount request. Cash movements follow the invoice and lease references stored on each ticket.</div><div class="grid">{"".join(cards)}</div></main><footer>Campus Customs · Local simulation · Drafts remain unsent; no real vendor or customer was contacted.</footer></body></html>'''
 
 
 def write_harness_run_note(starting: float, rows: list[dict[str, Any]], ending: float, agent_turns: dict[int, int]) -> None:

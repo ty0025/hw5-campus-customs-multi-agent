@@ -131,6 +131,7 @@ class McpContractTests(DatabaseGuard, unittest.IsolatedAsyncioTestCase):
         expected_names = {
             "check_inventory_stock", "check_vendor_restock_eligibility", "get_lease_due_status",
             "get_ticket_details", "update_ticket_status", "get_cash_balance", "propose_payment",
+            "propose_purchase_order",
             "save_customer_draft", "get_pricing_and_margin",
         }
         self.assertEqual({tool.name for tool in tools}, expected_names)
@@ -143,6 +144,7 @@ class McpContractTests(DatabaseGuard, unittest.IsolatedAsyncioTestCase):
             "update_ticket_status": {"ticket_id", "status", "resolution"},
             "get_cash_balance": set(),
             "propose_payment": {"amount", "recipient", "reason"},
+            "propose_purchase_order": {"ticket_id", "sku", "size", "quantity", "vendor_id", "reason"},
             "save_customer_draft": {"ticket_id", "draft_body"},
             "get_pricing_and_margin": {"sku"},
         }

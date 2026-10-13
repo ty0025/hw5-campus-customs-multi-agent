@@ -107,10 +107,14 @@ Reset the working database first, start the backend and dashboard, then dispatch
 2. **Ticket 102 — lease rent:** Facilities checks the lease against `desk.date_today`; Accounting can stage rent for human review.
 3. **Ticket 103 — hoodie discount request:** the team checks stock and the price/cost margin, then drafts a response or asks the customer for missing discount terms.
 
-These identities follow the database records; use them in preference to any ticket labels in an earlier planning document. Review the actual stock, invoice, lease, and pricing data before promising fulfillment or a discount.
+These identities follow the database records. Review the linked stock, invoice, lease, and pricing data before promising fulfillment or a discount.
 
 ## Human payment approval
 
 Agents do not execute payments. Accounting stages a proposal marked `PENDING_APPROVAL`; the operator reviews the payee, amount, purpose, and balance impact in the dashboard. Approval is submitted to `POST /api/payments/approve`. The backend checks available cash first and rejects any payment that would make the balance negative. If approved, it deducts the amount from `cash_accounts`, records the payment, and marks the referenced invoice or lease liability as paid. This is how an unpaid supplier invoice or rent obligation is cleared; a staged proposal alone does not change the cash balance or settle the liability.
+
+An inventory shortfall may also produce a separate pending purchase-order approval. Review it through the dashboard or `GET /api/approvals`, then approve it with `POST /api/purchase-orders/approve`. Approval rechecks the supplier's unpaid invoices, recorded stock shortfall, price, and available cash commitments, then records an internal staff handoff. It does not contact the vendor, record goods as received, or immediately debit cash; any later supplier payment still requires its own approval through `/api/payments/approve`.
+
+After a clean three-ticket run, build the frontend with `cd frontend && npm run build`, then capture its resolved-state dashboard with `python scripts/render_board_screenshots.py`. This one-shot renderer reads the working database and audit trail, uses a synchronous headless browser, and starts no API or Vite server.
 
 All customer messages stay as local drafts, and there are no outbound email or vendor integrations.

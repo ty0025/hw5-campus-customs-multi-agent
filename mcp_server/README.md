@@ -1,6 +1,6 @@
 # Campus Customs MCP Server
 
-This module gives Boss, Inventory, Accounting, Facilities, and Customer Service nine shared, typed FastMCP tools for reading shop facts and performing the limited local board writes needed for a decision.
+This module gives Boss, Inventory, Accounting, Facilities, and Customer Service ten shared, typed FastMCP tools for reading shop facts and staging the limited local board actions needed for a decision.
 It uses `FastMCP` from `mcp.server.fastmcp` and exports the registered server object as `mcp_server.server.mcp`.
 Problem 3 defined the tools, and Problem 4 adds a local stdio entry point for MCP clients; importing the module still starts no transport.
 No HTTP endpoint or network listener is configured.
@@ -9,21 +9,21 @@ No HTTP endpoint or network listener is configured.
 
 - The only tool database is `data/campus_customs_new.db`, resolved from the Homework 5 project root using the module's location, independently of the current working directory.
 - The path has no environment override or fallback to another database, and a missing working copy produces an error instead of creating a blank file.
-- Read tools open SQLite with `mode=ro` and `PRAGMA query_only = ON`; the three explicitly scoped board/proposal writes use bound SQL parameters and an atomic transaction against the same fixed working file.
+- Read tools open SQLite with `mode=ro` and `PRAGMA query_only = ON`; the four explicitly scoped board/proposal writes use bound SQL parameters and an atomic transaction against the same fixed working file.
 - Business-date comparisons use the single `desk.date_today` value; an absent or invalid value produces an error instead of using the computer's date.
 - These tools never execute payments, place orders, reserve stock, reset the database, send messages, or make AI calls. They may update ticket status/notes, stage a pending approval, and save a local customer draft.
 - Subsequent agent AI calls must use only `gpt-6-luna` through Portkey; this MCP module does not load API credentials.
 
 ## Ticket numbering correction
 
-The supplied Q3 labels its vendor tool as Ticket 102 and its lease tool as Ticket 103, but the actual database contains Ticket 101 (customer T-shirt order), Ticket 102 (rent notice), and Ticket 103 (bulk hoodie discount).
-Following the user's clarification, documentation uses the actual database relationships and records that discrepancy explicitly.
+The open tickets follow their actual database records: Ticket 101 is the customer T-shirt order, Ticket 102 is the rent notice, and Ticket 103 is the bulk hoodie discount.
+Tool-to-ticket mappings use the recorded ticket fields and obligation references; no cash event is attributed without a matching database link.
 The vendor tool supports Ticket 101 through its linked invoice and Ticket 103 when evaluating a candidate supplier; the lease tool supports Ticket 102.
 The hoodie request still needs a proposed discount and a margin decision in later problems; these three tools provide the requested facts without claiming to resolve the entire ticket.
 
 ## Tool contracts
 
-All nine tools include typed input and return contracts; read tools are annotated read-only, while the three local board writes are explicitly annotated as non-destructive local operations without external interactions.
+All ten tools include typed input and return contracts; read tools are annotated read-only, while the four local board writes are explicitly annotated as non-destructive local operations without external interactions.
 Python return values are Pydantic models; MCP serializes them to structured JSON, with dates represented as ISO `YYYY-MM-DD` strings.
 Positive integer inputs reject zero, negatives, booleans, fractions, and numeric strings.
 Invalid input or a missing requested record raises `ValueError` in direct Python calls and is surfaced as an MCP tool error through FastMCP.
@@ -103,12 +103,12 @@ Run the real MCP protocol verification from `hw5`:
 .\.venv\Scripts\python.exe -B tests/verify_mcp_stdio.py
 ```
 
-This loads the exact `.mcp.json` registration, starts its command in a child process, initializes an MCP session, discovers all nine tools, and verifies returned JSON against independent read-only SQL queries.
+This loads the exact `.mcp.json` registration, starts its command in a child process, initializes an MCP session, discovers all ten tools, and verifies returned JSON against independent read-only SQL queries.
 It checks rejected inputs, verifies both database hashes, closes the child session, and writes `output/mcp_tool_test_results.json` plus the live-query snapshot `output/mcp_smoke.json`.
 
 ## Problem 5 extension: complete tool registry
 
-The initial three tool descriptions above remain applicable. The complete server now exposes nine tools; this registry supersedes the earlier statements that the server is read-only or registers only three tools. All tools reach only `data/campus_customs_new.db`, resolved from the Homework 5 project root.
+The initial three tool descriptions above remain applicable. The complete server now exposes ten tools; this registry supersedes the earlier statements that the server is read-only or registers only three tools. All tools reach only `data/campus_customs_new.db`, resolved from the Homework 5 project root.
 
 | Tool and parameters | Return type | SQLite tables accessed | Effect |
 | --- | --- | --- | --- |
@@ -119,10 +119,11 @@ The initial three tool descriptions above remain applicable. The complete server
 | `update_ticket_status(ticket_id: int, status: str, resolution: str)` | `TicketStatusResult` | `tickets` | Writes only the ticket status and appends a resolution note to `tickets.notes`; it never changes payment records. |
 | `get_cash_balance(account_name: str = "Operating Cash")` | `CashBalanceResult` | `cash_accounts` | Read only; returns the recorded account name, balance, and account date. |
 | `propose_payment(amount: float, recipient: str, reason: str, ref_id: str | None)` | `PaymentProposalResult` | `cash_accounts`; for a reference, `invoices` or `leases`, `tickets`, and `approvals` | Checks available cash and obligation identity, then stages a referenced request in `approvals` with database state `pending` and returned state `PENDING_APPROVAL`; it never inserts into `payments`. Without `ref_id`, it returns an unstaged proposal payload. |
+| `propose_purchase_order(ticket_id, sku, size, quantity, vendor_id, reason)` | `PurchaseOrderProposalResult` | `tickets`, `inventory`, `vendors`, `invoices`, `pricing`, `approvals`, `purchase_orders` | Rechecks the exact shortfall, vendor specialty, ticket-linked supplier where present, unpaid-invoice block, and unit cost; writes only a pending approval and never sends an order or debits cash. |
 | `save_customer_draft(ticket_id: int, draft_body: str)` | `CustomerDraftResult` | `tickets`, `customer_drafts` | Reads recipient/subject and saves a local draft with `sent=false`; no outbound service is called. |
 | `get_pricing_and_margin(sku: str)` | `PricingAndMarginResult` | `pricing` | Read only; returns recorded cost/list price and calculated unit gross margin. |
 
-All tool inputs are typed and validated. The three local writes are `update_ticket_status`, `propose_payment`, and `save_customer_draft`; read operations use SQLite query-only mode. The proposal tool checks cash after other pending proposals before staging a new reference and refuses amounts that would take available cash below zero. Only the human approval flow may post an approved disbursement to `payments`.
+All tool inputs are typed and validated. The four local writes are `update_ticket_status`, `propose_payment`, `propose_purchase_order`, and `save_customer_draft`; read operations use SQLite query-only mode. Payment proposals stay in `approvals` until human approval. A purchase-order approval creates an internal staff handoff record only: no vendor is contacted, no stock is booked as received, and cash is unchanged until a separate payment is approved.
 
 The five PydanticAI agents are implemented in `backend/agent_team.py` and use an MCP stdio subprocess for all shop facts. The local server process receives no Portkey credential. Only the API process reads `PORTKEY_API_KEY` from the configured environment and makes agent requests through the Portkey gateway.
 

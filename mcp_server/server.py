@@ -139,6 +139,24 @@ class PaymentProposalResult(BaseModel):
     persisted_for_human_review: bool
 
 
+class PurchaseOrderProposalResult(BaseModel):
+    """A local purchase-order request that still requires a human decision."""
+
+    proposal_id: int
+    ticket_id: int
+    vendor_id: int
+    vendor_name: str
+    sku: str
+    size: str
+    quantity: int
+    unit_cost: float
+    amount: float
+    lead_days: int
+    reason: str
+    status: Literal["PENDING_APPROVAL"]
+    cash_changed: Literal[False]
+
+
 class CustomerDraftResult(BaseModel):
     """Saved local draft; ``sent`` is always false."""
 
@@ -528,6 +546,17 @@ def _ensure_approval_table(conn: sqlite3.Connection) -> None:
     conn.execute("CREATE INDEX IF NOT EXISTS idx_approvals_status ON approvals(status, id)")
 
 
+def _ensure_purchase_order_table(conn: sqlite3.Connection) -> None:
+    """Create the app-owned record for an approved staff handoff, never a sent order."""
+    conn.execute(
+        "CREATE TABLE IF NOT EXISTS purchase_orders ("
+        "id INTEGER PRIMARY KEY AUTOINCREMENT, approval_id INTEGER NOT NULL UNIQUE, "
+        "ticket_id INTEGER NOT NULL, vendor_id INTEGER NOT NULL, sku TEXT NOT NULL, "
+        "size TEXT NOT NULL, qty INTEGER NOT NULL, unit_cost REAL NOT NULL, total REAL NOT NULL, "
+        "lead_days INTEGER NOT NULL, status TEXT NOT NULL, created_at TEXT NOT NULL, approved_by TEXT)"
+    )
+
+
 @mcp.tool(annotations=WRITE_LOCAL)
 def propose_payment(
     amount: Annotated[float, Field(gt=0, allow_inf_nan=False)],
@@ -656,6 +685,162 @@ def propose_payment(
         reference_type=reference_type, ref_id=f"{reference_type}:{reference_number}",
         status="PENDING_APPROVAL", available_cash=balance,
         projected_cash_after_approval=round(balance - amount, 2), persisted_for_human_review=True,
+    )
+
+
+@mcp.tool(annotations=WRITE_LOCAL)
+def propose_purchase_order(
+    ticket_id: PositiveInt,
+    sku: NonemptyString,
+    size: NonemptyString,
+    quantity: PositiveInt,
+    vendor_id: PositiveInt,
+    reason: Annotated[str, Field(min_length=1, max_length=800)],
+) -> PurchaseOrderProposalResult:
+    """Stage a stock-shortfall purchase order for human approval and staff handoff.
+
+    The request must match the ticket's SKU/size and exact uncovered quantity,
+    use a recorded vendor candidate with a compatible apparel specialty, and
+    pass the vendor's open-invoice shipping block. The MCP tool never emails a
+    supplier, decrements stock, debits cash, or marks goods shipped. Approval
+    creates a local ``purchase_orders`` handoff; payment remains a separate,
+    human-approved cash operation.
+
+    Returns:
+        PurchaseOrderProposalResult with the recorded candidate, exact shortfall,
+        estimated commitment, and ``PENDING_APPROVAL`` state.
+    """
+    sku = _identifier(sku, "sku")
+    size = _identifier(size, "size")
+    reason = reason.strip()
+    if not reason:
+        raise ValueError("reason must not be empty.")
+
+    with _write_connection() as conn:
+        ticket = conn.execute(
+            "SELECT id, type, sku, size, qty, invoice_id, status FROM tickets WHERE id = ?",
+            (ticket_id,),
+        ).fetchone()
+        if ticket is None:
+            raise ValueError(f"Ticket {ticket_id} does not exist.")
+        if str(ticket["type"]).strip().casefold() not in {"customer_order", "price_override"}:
+            raise ValueError("A purchase order can only be linked to a product ticket.")
+        if str(ticket["sku"] or "").strip().upper() != sku or str(ticket["size"] or "").strip().upper() != size:
+            raise ValueError("Purchase-order SKU and size must match the recorded ticket.")
+
+        stock = conn.execute(
+            "SELECT qty FROM inventory WHERE sku = ? AND size = ?", (sku, size)
+        ).fetchone()
+        if stock is None:
+            raise ValueError("No inventory row exists for the ticket SKU and size; no quantity was inferred.")
+        required = int(ticket["qty"] or 0)
+        shortfall = max(0, required - int(stock["qty"]))
+        if shortfall <= 0:
+            raise ValueError("The ticket quantity is covered by recorded stock; no purchase order is needed.")
+        if quantity != shortfall:
+            raise ValueError(f"Purchase quantity must equal the current ticket shortfall ({shortfall}).")
+
+        _ensure_approval_table(conn)
+        _ensure_purchase_order_table(conn)
+        completed_handoff = conn.execute(
+            "SELECT id FROM purchase_orders WHERE ticket_id = ? AND status = 'approved_for_staff' LIMIT 1",
+            (ticket_id,),
+        ).fetchone()
+        if completed_handoff is not None:
+            raise ValueError(f"Ticket {ticket_id} already has an approved purchase order for staff handoff.")
+
+        vendor = conn.execute(
+            "SELECT id, name, specialty, lead_days FROM vendors WHERE id = ?", (vendor_id,)
+        ).fetchone()
+        if vendor is None:
+            raise ValueError(f"Vendor {vendor_id} does not exist.")
+        specialty = str(vendor["specialty"] or "").strip().casefold()
+        if "apparel" not in specialty and "reprint" not in specialty:
+            raise ValueError("The recorded vendor specialty is not compatible with an apparel restock.")
+
+        if ticket["invoice_id"] is not None:
+            linked = conn.execute(
+                "SELECT vendor_id FROM invoices WHERE id = ?", (ticket["invoice_id"],)
+            ).fetchone()
+            if linked is None or int(linked["vendor_id"]) != vendor_id:
+                raise ValueError("Vendor must match the supplier linked to this ticket's recorded invoice.")
+
+        unpaid = conn.execute(
+            "SELECT id, amount, status FROM invoices WHERE vendor_id = ?", (vendor_id,)
+        ).fetchall()
+        blockers = [row for row in unpaid if str(row["status"] or "").strip().casefold()
+                    in {"open", "unpaid", "overdue", "pending"}]
+        if blockers:
+            identifiers = ", ".join(str(row["id"]) for row in blockers)
+            raise ValueError(
+                f"Vendor {vendor['name']} cannot ship while invoice(s) {identifiers} remain unpaid; "
+                "Accounting must clear them through human approval first."
+            )
+
+        price = conn.execute("SELECT unit_cost FROM pricing WHERE sku = ?", (sku,)).fetchone()
+        if price is None:
+            raise ValueError(f"No unit cost is recorded for {sku}.")
+        unit_cost = round(float(price["unit_cost"]), 2)
+        amount = round(unit_cost * quantity, 2)
+        existing = conn.execute(
+            "SELECT id, amount, payload_json FROM approvals "
+            "WHERE ticket_id = ? AND kind = 'purchase_order' AND status = 'pending' ORDER BY id DESC LIMIT 1",
+            (ticket_id,),
+        ).fetchone()
+        if existing is not None:
+            previous = json.loads(existing["payload_json"] or "{}")
+            if (int(previous.get("vendor_id", -1)) != vendor_id
+                    or str(previous.get("sku", "")).upper() != sku
+                    or str(previous.get("size", "")).upper() != size
+                    or int(previous.get("qty", -1)) != quantity
+                    or not math.isclose(float(existing["amount"]), amount, rel_tol=0, abs_tol=0.005)):
+                raise ValueError("A different purchase order is already awaiting human approval for this ticket.")
+            proposal_id = int(existing["id"])
+        else:
+            cash = _cash_account(conn, "Operating Cash")
+            balance = round(float(cash["balance"]), 2)
+            pending = float(conn.execute(
+                "SELECT COALESCE(SUM(amount), 0) FROM approvals WHERE status = 'pending'"
+            ).fetchone()[0] or 0)
+            if amount > round(balance - pending, 2):
+                raise ValueError(
+                    f"Purchase proposal refused: {amount:.2f} exceeds unreserved available cash "
+                    f"{round(balance - pending, 2):.2f}."
+                )
+            payload = {
+                "vendor_id": vendor_id,
+                "vendor_name": str(vendor["name"]),
+                "sku": sku,
+                "size": size,
+                "qty": quantity,
+                "unit_cost": unit_cost,
+                "total": amount,
+                "lead_days": int(vendor["lead_days"]),
+                "reason": reason,
+                "requested_by": "Accounting",
+            }
+            cursor = conn.execute(
+                "INSERT INTO approvals(ticket_id,kind,ref_type,ref_id,amount,payload_json,status,created_at) "
+                "VALUES(?, 'purchase_order', 'vendor', ?, ?, ?, 'pending', ?)",
+                (ticket_id, vendor_id, amount, json.dumps(payload, ensure_ascii=False, separators=(",", ":")),
+                 datetime.now(timezone.utc).isoformat(timespec="seconds")),
+            )
+            proposal_id = int(cursor.lastrowid)
+
+    return PurchaseOrderProposalResult(
+        proposal_id=proposal_id,
+        ticket_id=ticket_id,
+        vendor_id=vendor_id,
+        vendor_name=str(vendor["name"]),
+        sku=sku,
+        size=size,
+        quantity=quantity,
+        unit_cost=unit_cost,
+        amount=amount,
+        lead_days=int(vendor["lead_days"]),
+        reason=reason,
+        status="PENDING_APPROVAL",
+        cash_changed=False,
     )
 
 

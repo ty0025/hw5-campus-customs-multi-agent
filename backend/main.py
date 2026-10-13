@@ -82,6 +82,11 @@ class PaymentApprovalRequest(BaseModel):
     reference_id: int
 
 
+class PurchaseOrderApprovalRequest(BaseModel):
+    approval_id: int = Field(gt=0)
+    approved_by: str = Field(default="Human Operator", min_length=1, max_length=120)
+
+
 def _connect(db_path: Path = WORKING_DB) -> sqlite3.Connection:
     if not db_path.exists():
         raise HTTPException(status_code=500, detail=f"Database file not found: {db_path.name}")
@@ -759,6 +764,48 @@ def get_events(limit: int = Query(default=100, ge=1, le=1000)) -> list[dict[str,
     return [_event_view(row) for row in records[-limit:]]
 
 
+@app.get("/api/approvals")
+def get_approvals(limit: int = Query(default=100, ge=1, le=500)) -> list[dict[str, Any]]:
+    """Return persisted pending and recent completed human-review requests."""
+    connection = _connect()
+    try:
+        if not _table_exists(connection, "approvals"):
+            return []
+        rows = connection.execute("SELECT * FROM approvals ORDER BY id DESC LIMIT ?", (limit,)).fetchall()
+        result: list[dict[str, Any]] = []
+        for raw in rows:
+            row = dict(raw)
+            try:
+                payload = json.loads(row.get("payload_json") or "{}")
+            except (TypeError, json.JSONDecodeError):
+                payload = {}
+            kind = str(row.get("kind") or "payment").strip().casefold()
+            state = str(row.get("status") or "").strip().casefold()
+            result.append({
+                "approval_id": row.get("id"),
+                "payment_id": row.get("id") if kind == "payment" else None,
+                "ticket_id": row.get("ticket_id"),
+                "kind": kind,
+                "amount": row.get("amount"),
+                "recipient": payload.get("payee") or payload.get("recipient") or payload.get("vendor_name"),
+                "reason": payload.get("reason") or (
+                    f"{payload.get('qty', '')} x {payload.get('sku', '')} {payload.get('size', '')}".strip()
+                    if kind == "purchase_order" else "Recorded obligation"
+                ),
+                "reference_type": row.get("ref_type"),
+                "reference_id": row.get("ref_id"),
+                "sku": payload.get("sku"),
+                "size": payload.get("size"),
+                "quantity": payload.get("qty"),
+                "lead_days": payload.get("lead_days"),
+                "status": "PENDING_APPROVAL" if state == "pending" else state.upper(),
+                "created_at": row.get("created_at"),
+            })
+        return list(reversed(result))
+    finally:
+        connection.close()
+
+
 @app.post("/api/payments/approve")
 def approve_payment(request: PaymentApprovalRequest) -> dict[str, Any]:
     """Finalize a staged payment after a transactional balance and reference check."""
@@ -907,6 +954,142 @@ def approve_payment(request: PaymentApprovalRequest) -> dict[str, Any]:
     except (TypeError, ValueError, sqlite3.Error) as exc:
         connection.rollback()
         raise HTTPException(status_code=500, detail="Payment approval could not be completed safely.") from exc
+    finally:
+        connection.close()
+
+
+@app.post("/api/purchase-orders/approve")
+def approve_purchase_order(request: PurchaseOrderApprovalRequest) -> dict[str, Any]:
+    """Approve a staged local PO for staff handoff without contacting a vendor or moving cash."""
+    connection = _connect()
+    try:
+        connection.execute("BEGIN IMMEDIATE")
+        if not _table_exists(connection, "approvals"):
+            raise HTTPException(status_code=404, detail="Purchase-order approval was not found.")
+        approval = connection.execute(
+            "SELECT * FROM approvals WHERE id = ?", (request.approval_id,)
+        ).fetchone()
+        if approval is None:
+            raise HTTPException(status_code=404, detail="Purchase-order approval was not found.")
+        if str(approval["kind"]).strip().casefold() != "purchase_order":
+            raise HTTPException(status_code=409, detail="This request is not a purchase order.")
+        if str(approval["status"]).strip().casefold() != "pending":
+            raise HTTPException(status_code=409, detail="This purchase order is no longer pending approval.")
+        try:
+            payload = json.loads(approval["payload_json"] or "{}")
+            vendor_id = int(payload["vendor_id"])
+            ticket_id = int(approval["ticket_id"])
+            sku = str(payload["sku"]).strip().upper()
+            size = str(payload["size"]).strip().upper()
+            quantity = int(payload["qty"])
+            unit_cost = float(payload["unit_cost"])
+            amount = float(approval["amount"])
+            lead_days = int(payload["lead_days"])
+        except (TypeError, ValueError, KeyError, json.JSONDecodeError) as exc:
+            raise HTTPException(status_code=409, detail="The staged purchase-order details are invalid.") from exc
+        if (not sku or not size or quantity <= 0 or unit_cost <= 0 or amount <= 0
+                or lead_days < 0 or not math.isclose(amount, round(unit_cost * quantity, 2), rel_tol=0, abs_tol=0.005)):
+            raise HTTPException(status_code=409, detail="The staged purchase-order amount or item details do not reconcile.")
+
+        vendor = connection.execute("SELECT id, name, specialty, lead_days FROM vendors WHERE id = ?", (vendor_id,)).fetchone()
+        if vendor is None or int(vendor["lead_days"]) != lead_days:
+            raise HTTPException(status_code=409, detail="The recorded vendor or lead-time details have changed.")
+        specialty = str(vendor["specialty"] or "").strip().casefold()
+        if "apparel" not in specialty and "reprint" not in specialty:
+            raise HTTPException(status_code=409, detail="The vendor is not recorded as an apparel supplier.")
+        blockers = connection.execute(
+            "SELECT id FROM invoices WHERE vendor_id = ? AND lower(trim(status)) IN ('open','unpaid','overdue','pending')",
+            (vendor_id,),
+        ).fetchall()
+        if blockers:
+            raise HTTPException(status_code=409, detail="The vendor still has an open unpaid invoice; no order was approved.")
+
+        ticket = connection.execute(
+            "SELECT sku, size, qty, invoice_id FROM tickets WHERE id = ?", (ticket_id,)
+        ).fetchone()
+        if ticket is None or str(ticket["sku"] or "").strip().upper() != sku or str(ticket["size"] or "").strip().upper() != size:
+            raise HTTPException(status_code=409, detail="The purchase order no longer matches its ticket.")
+        if ticket["invoice_id"] is not None:
+            linked_invoice = connection.execute(
+                "SELECT vendor_id FROM invoices WHERE id = ?", (ticket["invoice_id"],)
+            ).fetchone()
+            if linked_invoice is None or int(linked_invoice["vendor_id"]) != vendor_id:
+                raise HTTPException(status_code=409, detail="The vendor no longer matches the ticket's linked invoice.")
+        stock = connection.execute("SELECT qty FROM inventory WHERE sku = ? AND size = ?", (sku, size)).fetchone()
+        price = connection.execute("SELECT unit_cost FROM pricing WHERE sku = ?", (sku,)).fetchone()
+        if stock is None or price is None:
+            raise HTTPException(status_code=409, detail="Current inventory or pricing facts are unavailable.")
+        shortfall = max(0, int(ticket["qty"] or 0) - int(stock["qty"]))
+        if quantity != shortfall or not math.isclose(float(price["unit_cost"]), unit_cost, rel_tol=0, abs_tol=0.005):
+            raise HTTPException(status_code=409, detail="Stock shortfall or unit cost changed; stage a fresh request.")
+
+        _, _, _, balance = _cash_account(connection)
+        pending_total = float(connection.execute(
+            "SELECT COALESCE(SUM(amount), 0) FROM approvals WHERE status = 'pending' AND id <> ?",
+            (request.approval_id,),
+        ).fetchone()[0] or 0)
+        if amount > round(balance - pending_total, 2):
+            raise HTTPException(status_code=400, detail="Insufficient available cash for this purchase commitment; cash was not changed.")
+
+        existing_order = connection.execute(
+            "SELECT id FROM purchase_orders WHERE ticket_id = ? AND status = 'approved_for_staff' LIMIT 1",
+            (ticket_id,),
+        ).fetchone() if _table_exists(connection, "purchase_orders") else None
+        if existing_order is not None:
+            raise HTTPException(status_code=409, detail="This ticket already has an approved staff handoff.")
+
+        connection.execute(
+            "CREATE TABLE IF NOT EXISTS purchase_orders ("
+            "id INTEGER PRIMARY KEY AUTOINCREMENT, approval_id INTEGER NOT NULL UNIQUE, ticket_id INTEGER NOT NULL, "
+            "vendor_id INTEGER NOT NULL, sku TEXT NOT NULL, size TEXT NOT NULL, qty INTEGER NOT NULL, "
+            "unit_cost REAL NOT NULL, total REAL NOT NULL, lead_days INTEGER NOT NULL, status TEXT NOT NULL, "
+            "created_at TEXT NOT NULL, approved_by TEXT)"
+        )
+        decided_at = datetime.now(timezone.utc).isoformat(timespec="seconds")
+        cursor = connection.execute(
+            "INSERT INTO purchase_orders(approval_id,ticket_id,vendor_id,sku,size,qty,unit_cost,total,lead_days,status,created_at,approved_by) "
+            "VALUES(?,?,?,?,?,?,?,?,?,?,?,?)",
+            (request.approval_id, ticket_id, vendor_id, sku, size, quantity, unit_cost, amount,
+             lead_days, "approved_for_staff", decided_at, request.approved_by.strip()),
+        )
+        purchase_order_id = int(cursor.lastrowid)
+        connection.execute(
+            "UPDATE approvals SET status='approved', decided_at=?, decided_by=?, decision_note=? WHERE id=?",
+            (decided_at, request.approved_by.strip(), f"Approved for internal staff handoff as PO {purchase_order_id}; no vendor was contacted.", request.approval_id),
+        )
+        # The local ticket work is complete once staff has an approved, recorded
+        # handoff; this does not claim shipment or delivery.
+        notes_column = _pick(_columns(connection, "tickets"), "notes", "description")
+        if notes_column:
+            connection.execute(
+                f"UPDATE tickets SET status='resolved', {_quote(notes_column)} = COALESCE({_quote(notes_column)}, '') || ? WHERE id = ?",
+                (f"\nResolution: Purchase order {purchase_order_id} was approved for internal staff handoff. No vendor contact or shipment is claimed.", ticket_id),
+            )
+        connection.commit()
+        _append_audit({
+            "timestamp": decided_at,
+            "ticket_id": ticket_id,
+            "agent_name": "HumanApproval",
+            "active_agent": "HumanApproval",
+            "action": "purchase_order_approved_for_staff",
+            "reasoning": f"Purchase order {purchase_order_id} was approved for internal staff handoff; no external order was sent and cash was unchanged.",
+            "tool_calls": [],
+        })
+        return {
+            "status": "APPROVED",
+            "approval_id": request.approval_id,
+            "purchase_order_id": purchase_order_id,
+            "amount": amount,
+            "cash_changed": False,
+            "balance": balance,
+            "vendor": str(vendor["name"]),
+        }
+    except HTTPException:
+        connection.rollback()
+        raise
+    except (TypeError, ValueError, sqlite3.Error) as exc:
+        connection.rollback()
+        raise HTTPException(status_code=500, detail="Purchase-order approval could not be completed safely.") from exc
     finally:
         connection.close()
 
