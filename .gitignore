@@ -20,3 +20,6 @@ dist/
 !data/
 !data/campus_customs.db
 !data/campus_customs_new.db
+
+# Local editor/preview settings
+.claude/

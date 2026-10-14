@@ -131,7 +131,7 @@ class McpContractTests(DatabaseGuard, unittest.IsolatedAsyncioTestCase):
         expected_names = {
             "check_inventory_stock", "check_vendor_restock_eligibility", "get_lease_due_status",
             "get_ticket_details", "update_ticket_status", "get_cash_balance", "propose_payment",
-            "propose_purchase_order",
+            "propose_purchase_order", "find_restock_vendors",
             "save_customer_draft", "get_pricing_and_margin",
         }
         self.assertEqual({tool.name for tool in tools}, expected_names)
@@ -147,10 +147,11 @@ class McpContractTests(DatabaseGuard, unittest.IsolatedAsyncioTestCase):
             "propose_purchase_order": {"ticket_id", "sku", "size", "quantity", "vendor_id", "reason"},
             "save_customer_draft": {"ticket_id", "draft_body"},
             "get_pricing_and_margin": {"sku"},
+            "find_restock_vendors": {"sku"},
         }
         read_only_tools = {
             "check_inventory_stock", "check_vendor_restock_eligibility", "get_lease_due_status",
-            "get_ticket_details", "get_cash_balance", "get_pricing_and_margin",
+            "get_ticket_details", "get_cash_balance", "get_pricing_and_margin", "find_restock_vendors",
         }
         for tool in tools:
             self.assertEqual(set(tool.inputSchema.get("required", [])), expected_parameters[tool.name])

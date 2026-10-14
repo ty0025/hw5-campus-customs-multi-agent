@@ -24,42 +24,52 @@ from backend.models import AgentName, AgentResult, DelegationRequest, Delegation
 
 
 MCP_TOOL_NAMES = frozenset({
+    "get_ticket_details",
     "check_inventory_stock",
+    "find_restock_vendors",
     "check_vendor_restock_eligibility",
     "get_lease_due_status",
-    "get_ticket_details",
-    "update_ticket_status",
     "get_cash_balance",
+    "get_pricing_and_margin",
     "propose_payment",
     "propose_purchase_order",
     "save_customer_draft",
-    "get_pricing_and_margin",
+    "update_ticket_status",
 })
+FINANCE_TOOLS = frozenset({"propose_payment", "propose_purchase_order"})
 AGENTS: tuple[AgentName, ...] = ("Boss", "Inventory", "Accounting", "Facilities", "Customer Service")
+
+# Token and loop limits. A ticket normally needs 3-5 agent turns and fewer than 20 tool calls.
 MAX_DELEGATION_DEPTH = 6
 MAX_AGENT_TURNS_PER_TICKET = 12
-MAX_MCP_CALLS_PER_TICKET = 36
-REQUEST_LIMIT_PER_AGENT_TURN = 8
-TOOL_CALL_LIMIT_PER_AGENT_TURN = 8
-TOTAL_TOKEN_LIMIT_PER_AGENT_TURN = 16000
+MAX_MCP_CALLS_PER_TICKET = 40
+REQUEST_LIMIT_PER_AGENT_TURN = 10
+TOOL_CALL_LIMIT_PER_AGENT_TURN = 10
+TOTAL_TOKEN_LIMIT_PER_AGENT_TURN = 60000
 CHAT_MODEL_SETTINGS: dict[str, Any] = {"openai_reasoning_effort": "none"}
+
 MCP_TOOL_REFERENCE = """
-FastMCP bridge usage: call call_shop_mcp_tool with `tool_name` and an `arguments` JSON object.
-Available contracts:
-- check_inventory_stock: {sku, size, order_quantity}
-- check_vendor_restock_eligibility: {vendor_id}
-- get_lease_due_status: {lease_id}
-- get_ticket_details: {ticket_id}
-- update_ticket_status: {ticket_id, status, resolution}
-- get_cash_balance: {account_name}; omit account_name to use the server default.
-- propose_payment: {amount, recipient, reason, ref_id}; ref_id must be invoice:<id> or lease:<id> to stage.
-- propose_purchase_order: {ticket_id, sku, size, quantity, vendor_id, reason}; stage only an exact stock shortfall, after all vendor invoice blockers are cleared.
-- save_customer_draft: {ticket_id, draft_body}
-- get_pricing_and_margin: {sku}
-Only these tools are accepted; never access the database outside FastMCP.
+How to reach shop data: call `call_shop_mcp_tool` with `tool_name` and an `arguments` object.
+- get_ticket_details {ticket_id}: ticket fields, desk date, linked invoice vendor, approvals already staged and their status, drafts saved
+- check_inventory_stock {sku, size, order_quantity}
+- find_restock_vendors {sku}: every vendor with specialty, lead_days, unpaid-invoice hold, arrival date if ordered today
+- check_vendor_restock_eligibility {vendor_id}
+- get_lease_due_status {lease_id}
+- get_cash_balance {}
+- get_pricing_and_margin {sku, quantity, discount_percent}
+- propose_payment {amount, recipient, reason, ref_id} with ref_id "invoice:<id>" or "lease:<id>"  (Accounting only)
+- propose_purchase_order {ticket_id, sku, size, quantity, vendor_id, reason}  (Accounting only)
+- save_customer_draft {ticket_id, draft_body}
+- update_ticket_status {ticket_id, status, resolution}
+Delegate with `delegate_to_agent` {target_agent, task, context}. Put the facts the other agent needs in `context`.
 """
 
 AgentKey = Literal["Boss", "Inventory", "Accounting", "Facilities", "Customer Service"]
+
+
+def _clip(text: Any, limit: int) -> str:
+    value = text if isinstance(text, str) else json.dumps(text, ensure_ascii=False, default=str)
+    return value if len(value) <= limit else value[: limit - 3] + "..."
 
 
 @dataclass(frozen=True)
@@ -73,16 +83,17 @@ class AgentContext:
 
 
 def _child_environment(project_root: Path) -> dict[str, str]:
-    """Pass only the runtime variables needed by the local MCP subprocess."""
+    """Pass only the runtime variables needed by the local MCP subprocess (no API key)."""
     names = ("PATH", "SYSTEMROOT", "WINDIR", "TEMP", "TMP", "LANG", "LC_ALL")
     env = {key: os.environ[key] for key in names if key in os.environ}
     env["PYTHONPATH"] = str(project_root)
+    env["PYTHONIOENCODING"] = "utf-8"
     return env
 
 
 @asynccontextmanager
 async def open_mcp_session(project_root: Path = HW5_DIR) -> AsyncIterator[ClientSession]:
-    """Start the configured local FastMCP module and initialize its stdio session."""
+    """Start the FastMCP server as a stdio subprocess and check its tool list."""
     server = StdioServerParameters(
         command=sys.executable,
         args=["-m", "mcp_server.server"],
@@ -93,15 +104,14 @@ async def open_mcp_session(project_root: Path = HW5_DIR) -> AsyncIterator[Client
         async with ClientSession(read_stream, write_stream) as session:
             await session.initialize()
             discovered = await session.list_tools()
-            available = {tool.name for tool in discovered.tools}
-            missing = sorted(MCP_TOOL_NAMES - available)
+            missing = sorted(MCP_TOOL_NAMES - {tool.name for tool in discovered.tools})
             if missing:
                 raise RuntimeError(f"FastMCP server is missing required tools: {', '.join(missing)}")
             yield session
 
 
 class AgentTeam:
-    """Five mutually delegating agents with bounded, audited MCP access."""
+    """Five agents; any of them can delegate to any other. All shop facts come through MCP."""
 
     def __init__(
         self,
@@ -132,11 +142,7 @@ class AgentTeam:
             default_headers={"x-portkey-api-key": PORTKEY_API_KEY},
         )
         provider = OpenAIProvider(openai_client=self._openai_client)
-        self.model = OpenAIChatModel(
-            MODEL_NAME,
-            provider=provider,
-            settings=CHAT_MODEL_SETTINGS,
-        )
+        self.model = OpenAIChatModel(MODEL_NAME, provider=provider, settings=CHAT_MODEL_SETTINGS)
         self.agents = {name: self._build_agent(name) for name in AGENTS}
 
     def _build_agent(self, agent_name: AgentName) -> Agent[AgentContext, AgentResult]:
@@ -163,7 +169,8 @@ class AgentTeam:
             try:
                 return await ctx.deps.team.call_shop_tool(ctx.deps, tool_name, arguments)
             except Exception as exc:
-                return json.dumps({"ok": False, "error": f"MCP tool failed ({type(exc).__name__})."})
+                # The agent sees the real reason (for example "refused: exceeds available cash").
+                return json.dumps({"ok": False, "error": _clip(str(exc) or type(exc).__name__, 500)})
 
         @agent.tool
         async def delegate_to_agent(
@@ -172,233 +179,115 @@ class AgentTeam:
             task: str,
             context: str = "",
         ) -> str:
-            """Delegate a ticket-scoped task to any other team member."""
+            """Hand a ticket-scoped task to any other team member and get its result back."""
             try:
-                if ctx.deps.depth >= MAX_DELEGATION_DEPTH:
-                    ctx.deps.team.audit.append(
-                        ticket_id=ctx.deps.ticket_id,
-                        agent_name=ctx.deps.active_agent,
-                        action="delegation",
-                        delegation_target=target_agent,
-                        reasoning_notes="Delegation blocked: maximum depth of six reached; current findings must be used.",
-                        depth=MAX_DELEGATION_DEPTH,
-                    )
-                    return DelegationResult(
-                        ticket_id=ctx.deps.ticket_id,
-                        source_agent=ctx.deps.active_agent,
-                        target_agent=target_agent,
-                        state="blocked",
-                        depth=MAX_DELEGATION_DEPTH,
-                        summary="Maximum delegation depth of six reached; Boss must use current findings.",
-                    ).model_dump_json()
-                if ctx.deps.team.agent_turns >= MAX_AGENT_TURNS_PER_TICKET:
-                    ctx.deps.team.audit.append(
-                        ticket_id=ctx.deps.ticket_id,
-                        agent_name=ctx.deps.active_agent,
-                        action="delegation",
-                        delegation_target=target_agent,
-                        reasoning_notes="Delegation blocked: per-ticket agent-turn budget reached.",
-                        depth=ctx.deps.depth,
-                    )
-                    return DelegationResult(
-                        ticket_id=ctx.deps.ticket_id,
-                        source_agent=ctx.deps.active_agent,
-                        target_agent=target_agent,
-                        state="blocked",
-                        depth=ctx.deps.depth,
-                        summary="Per-ticket agent-turn budget reached; Boss must use current findings.",
-                    ).model_dump_json()
                 request = DelegationRequest(
                     ticket_id=ctx.deps.ticket_id,
                     source_agent=ctx.deps.active_agent,
                     target_agent=target_agent,
-                    task=task,
-                    context=context,
-                    depth=ctx.deps.depth + 1,
+                    task=_clip(task, 1200),
+                    context=_clip(context, 5000),
+                    depth=min(ctx.deps.depth + 1, MAX_DELEGATION_DEPTH),
                 )
-                result = await ctx.deps.team.delegate(request)
-                return result.model_dump_json()
             except Exception as exc:
-                ctx.deps.team.audit.append(
-                    ticket_id=ctx.deps.ticket_id,
-                    agent_name=ctx.deps.active_agent,
-                    action="error",
-                    delegation_target=target_agent,
-                    reasoning_notes=f"Delegation request was rejected with {type(exc).__name__}.",
-                    depth=ctx.deps.depth,
-                )
-                return json.dumps({"state": "failed", "error": type(exc).__name__})
+                return json.dumps({"state": "failed", "error": _clip(str(exc), 300)})
+            if ctx.deps.depth >= MAX_DELEGATION_DEPTH:
+                return self._blocked_delegation(request, "Maximum delegation depth of six reached; use current findings.").model_dump_json()
+            return (await ctx.deps.team.delegate(request)).model_dump_json()
 
         return agent
 
-    async def call_shop_tool(
-        self,
-        context: AgentContext,
-        tool_name: str,
-        arguments: dict[str, Any],
-    ) -> str:
-        """Call an allowlisted server tool and audit its observable lifecycle."""
+    async def call_shop_tool(self, context: AgentContext, tool_name: str, arguments: dict[str, Any]) -> str:
+        """Call an allowlisted MCP tool and log the arguments and result."""
+        def log_error(message: str) -> None:
+            self.audit.append(
+                ticket_id=context.ticket_id, agent_name=context.active_agent, action="error",
+                tool_called=str(tool_name)[:100], tool_arguments=arguments if isinstance(arguments, dict) else None,
+                message=_clip(message, 1000), depth=context.depth,
+            )
+
         if tool_name not in MCP_TOOL_NAMES:
-            self.audit.append(
-                ticket_id=context.ticket_id,
-                agent_name=context.active_agent,
-                action="error",
-                tool_called=str(tool_name)[:100],
-                reasoning_notes="Rejected an unregistered tool name before it could reach the MCP server.",
-                depth=context.depth,
-            )
-            raise ValueError(f"Tool {tool_name!r} is not on the fixed FastMCP allowlist.")
-        if tool_name in {"propose_payment", "propose_purchase_order"} and context.active_agent != "Accounting":
-            self.audit.append(
-                ticket_id=context.ticket_id,
-                agent_name=context.active_agent,
-                action="error",
-                tool_called=tool_name,
-                reasoning_notes="Rejected a financial approval request from an agent outside Accounting's write scope.",
-                depth=context.depth,
-            )
-            raise PermissionError("Only Accounting may stage payment or purchase-order approvals.")
+            log_error("Rejected a tool name that is not on the MCP allowlist.")
+            raise ValueError(f"Tool {tool_name!r} is not on the FastMCP allowlist.")
+        if tool_name in FINANCE_TOOLS and context.active_agent != "Accounting":
+            log_error("Only Accounting may stage payments or purchase orders.")
+            raise PermissionError("Only Accounting may stage payment or purchase-order approvals. Delegate to Accounting.")
         if self.mcp_calls >= MAX_MCP_CALLS_PER_TICKET:
-            self.audit.append(
-                ticket_id=context.ticket_id,
-                agent_name=context.active_agent,
-                action="error",
-                tool_called=tool_name,
-                reasoning_notes="MCP call blocked at the per-ticket safety limit.",
-                depth=context.depth,
-            )
+            log_error("Per-ticket MCP call limit reached.")
             raise RuntimeError("MCP tool-call limit reached for this ticket.")
         self.mcp_calls += 1
         self.audit.append(
-            ticket_id=context.ticket_id,
-            agent_name=context.active_agent,
-            action="tool_call_started",
-            tool_called=tool_name,
-            reasoning_notes="Calling the approved local FastMCP tool; arguments are not copied to the audit log.",
-            depth=context.depth,
+            ticket_id=context.ticket_id, agent_name=context.active_agent, action="tool_call_started",
+            tool_called=tool_name, tool_arguments=arguments, depth=context.depth,
         )
         try:
             response = await self.session.call_tool(tool_name, arguments)
             if getattr(response, "isError", False):
-                message = " ".join(
-                    block.text for block in getattr(response, "content", [])
-                    if getattr(block, "text", None)
-                )
+                message = " ".join(block.text for block in getattr(response, "content", []) if getattr(block, "text", None))
                 raise RuntimeError(message[:500] or "FastMCP returned a tool error.")
             structured = getattr(response, "structuredContent", None)
-            if structured is None:
-                structured = getattr(response, "structured_content", None)
             if structured is not None:
                 rendered = json.dumps(structured, ensure_ascii=False, default=str)
             else:
-                rendered = "\n".join(
-                    block.text for block in getattr(response, "content", [])
-                    if getattr(block, "text", None)
-                )
-            self.audit.append(
-                ticket_id=context.ticket_id,
-                agent_name=context.active_agent,
-                action="tool_call_completed",
-                tool_called=tool_name,
-                reasoning_notes="FastMCP returned recorded shop data or a local board result.",
-                depth=context.depth,
-            )
-            return rendered
+                rendered = "\n".join(block.text for block in getattr(response, "content", []) if getattr(block, "text", None))
         except Exception as exc:
-            self.audit.append(
-                ticket_id=context.ticket_id,
-                agent_name=context.active_agent,
-                action="error",
-                tool_called=tool_name,
-                reasoning_notes=f"FastMCP call failed with {type(exc).__name__}; no fallback database was used.",
-                depth=context.depth,
-            )
+            log_error(f"MCP call failed: {exc}")
             raise
+        self.audit.append(
+            ticket_id=context.ticket_id, agent_name=context.active_agent, action="tool_call_completed",
+            tool_called=tool_name, tool_arguments=arguments, tool_result=_clip(rendered, 2000), depth=context.depth,
+        )
+        return rendered
 
     async def delegate(self, request: DelegationRequest) -> DelegationResult:
-        """Run a bounded specialist delegation and return a structured result."""
-        depth = request.depth
-        if depth > MAX_DELEGATION_DEPTH:
-            return self._blocked_delegation(request, "Maximum delegation depth of six was reached.")
+        """Run the target agent on the delegated task and return its structured result."""
         if self.agent_turns >= MAX_AGENT_TURNS_PER_TICKET:
-            return self._blocked_delegation(request, "Per-ticket agent-turn budget was reached.")
+            return self._blocked_delegation(request, "Per-ticket agent-turn budget reached; use current findings.")
         self.audit.append(
-            ticket_id=request.ticket_id,
-            agent_name=request.source_agent,
-            action="delegation",
+            ticket_id=request.ticket_id, agent_name=request.source_agent, action="delegation",
             delegation_target=request.target_agent,
-            reasoning_notes=f"Delegated a bounded specialist task: {request.task[:300]}",
-            depth=depth,
+            message=_clip(f"{request.task}\nContext: {request.context}" if request.context else request.task, 4000),
+            depth=request.depth,
         )
         try:
             result = await self._run_agent(
-                request.target_agent,
-                task=request.task,
-                context=request.context,
-                ticket_id=request.ticket_id,
-                depth=depth,
-            )
-            return DelegationResult(
-                ticket_id=request.ticket_id,
-                source_agent=request.source_agent,
-                target_agent=request.target_agent,
-                state="completed",
-                depth=depth,
-                summary=result.summary,
-                findings=result.findings,
+                request.target_agent, task=request.task, context=request.context,
+                ticket_id=request.ticket_id, depth=request.depth,
             )
         except Exception as exc:
             return DelegationResult(
-                ticket_id=request.ticket_id,
-                source_agent=request.source_agent,
-                target_agent=request.target_agent,
-                state="failed",
-                depth=depth,
-                summary="The specialist run failed; keep the ticket unresolved and report the failure to Boss.",
-                findings=[type(exc).__name__],
+                ticket_id=request.ticket_id, source_agent=request.source_agent, target_agent=request.target_agent,
+                state="failed", depth=request.depth,
+                summary=_clip(f"{request.target_agent} could not finish: {exc}", 1600),
             )
+        return DelegationResult(
+            ticket_id=request.ticket_id, source_agent=request.source_agent, target_agent=request.target_agent,
+            state="completed", depth=request.depth,
+            summary=_clip(f"{result.summary} Next: {result.next_action}" if result.next_action else result.summary, 1600),
+            findings=result.findings,
+        )
 
     def _blocked_delegation(self, request: DelegationRequest, reason: str) -> DelegationResult:
         self.audit.append(
-            ticket_id=request.ticket_id,
-            agent_name=request.source_agent,
-            action="delegation",
-            delegation_target=request.target_agent,
-            reasoning_notes=f"Delegation blocked: {reason}",
+            ticket_id=request.ticket_id, agent_name=request.source_agent, action="delegation",
+            delegation_target=request.target_agent, message=f"Delegation blocked: {reason}",
             depth=min(request.depth, MAX_DELEGATION_DEPTH),
         )
         return DelegationResult(
-            ticket_id=request.ticket_id,
-            source_agent=request.source_agent,
-            target_agent=request.target_agent,
-            state="blocked",
-            depth=min(request.depth, MAX_DELEGATION_DEPTH),
-            summary=reason,
+            ticket_id=request.ticket_id, source_agent=request.source_agent, target_agent=request.target_agent,
+            state="blocked", depth=min(request.depth, MAX_DELEGATION_DEPTH), summary=reason,
         )
 
-    async def _run_agent(
-        self,
-        agent_name: AgentName,
-        *,
-        task: str,
-        context: str,
-        ticket_id: int,
-        depth: int,
-    ) -> AgentResult:
-        if depth > MAX_DELEGATION_DEPTH:
-            raise RuntimeError("Maximum delegation depth exceeded.")
+    async def _run_agent(self, agent_name: AgentName, *, task: str, context: str, ticket_id: int, depth: int) -> AgentResult:
         if self.agent_turns >= MAX_AGENT_TURNS_PER_TICKET:
             raise RuntimeError("Per-ticket agent-turn budget exceeded.")
         self.agent_turns += 1
         self.audit.append(
-            ticket_id=ticket_id,
-            agent_name=agent_name,
-            action="thinking_started",
-            reasoning_notes="Agent analysis started; only concise operational events are logged, not hidden chain-of-thought.",
-            depth=depth,
+            ticket_id=ticket_id, agent_name=agent_name, action="thinking_started",
+            message=_clip(task, 1200), depth=depth,
         )
         deps = AgentContext(team=self, ticket_id=ticket_id, active_agent=agent_name, depth=depth)
-        prompt = f"Ticket ID: {ticket_id}\nTask: {task}\nRelevant context: {context or 'Use verified ticket and shop facts from MCP.'}"
+        prompt = f"Ticket ID: {ticket_id}\nTask: {task}\nContext: {context or 'Read the facts you need through MCP.'}"
         try:
             result = await self.agents[agent_name].run(
                 prompt,
@@ -409,91 +298,67 @@ class AgentTeam:
                     total_tokens_limit=TOTAL_TOKEN_LIMIT_PER_AGENT_TURN,
                 ),
             )
-            usage = result.usage() if callable(getattr(result, "usage", None)) else None
-            if usage is not None:
-                self.model_requests += int(getattr(usage, "requests", 0) or 0)
-                self.total_tokens += int(getattr(usage, "total_tokens", 0) or 0)
-            output = getattr(result, "output", None)
-            if output is None:
-                output = result.data
-            data = output.model_dump() if isinstance(output, AgentResult) else output
-            data.update(ticket_id=ticket_id, agent_name=agent_name)
+            usage = result.usage  # a property in pydantic-ai 2.x
+            requests = int(getattr(usage, "requests", 0) or 0)
+            input_tokens = int(getattr(usage, "input_tokens", 0) or 0)
+            output_tokens = int(getattr(usage, "output_tokens", 0) or 0)
+            self.model_requests += requests
+            self.total_tokens += input_tokens + output_tokens
+            data = result.output.model_dump()
+            data.update(ticket_id=ticket_id, agent_name=agent_name, findings=data.get("findings", [])[:12])
             if agent_name != "Boss":
                 data["ticket_status"] = None
             parsed = AgentResult.model_validate(data)
-            self.audit.append(
-                ticket_id=ticket_id,
-                agent_name=agent_name,
-                action="response_synthesis",
-                reasoning_notes=f"Structured result prepared: {parsed.summary[:900]}",
-                depth=depth,
-            )
-            return parsed
         except Exception as exc:
             self.audit.append(
-                ticket_id=ticket_id,
-                agent_name=agent_name,
-                action="error",
-                reasoning_notes=f"Agent run failed with {type(exc).__name__}; ticket state remains unchanged by this failure.",
-                depth=depth,
+                ticket_id=ticket_id, agent_name=agent_name, action="error",
+                message=_clip(f"{agent_name} run failed: {type(exc).__name__}: {exc}", 1000), depth=depth,
             )
             raise
+        self.audit.append(
+            ticket_id=ticket_id, agent_name=agent_name, action="response_synthesis",
+            message=_clip(f"{parsed.summary}\nNext: {parsed.next_action}" if parsed.next_action else parsed.summary, 4000),
+            findings=parsed.findings, model=MODEL_NAME,
+            usage={"requests": requests, "input_tokens": input_tokens, "output_tokens": output_tokens},
+            depth=depth,
+        )
+        return parsed
+
+    async def _read_ticket(self, context: AgentContext) -> Ticket:
+        details = json.loads(await self.call_shop_tool(context, "get_ticket_details", {"ticket_id": context.ticket_id}))
+        return Ticket.model_validate({key: details[key] for key in Ticket.model_fields if key in details})
 
     async def run_ticket(self, ticket_id: int) -> TicketRunResponse:
-        """Read one ticket through MCP, run Boss and return the auditable result."""
-        if ticket_id <= 0:
-            raise ValueError("ticket_id must be a positive integer.")
-        system_context = AgentContext(self, ticket_id, "Boss", 0)
-        ticket_json = await self.call_shop_tool(system_context, "get_ticket_details", {"ticket_id": ticket_id})
-        try:
-            ticket_data = json.loads(ticket_json)
-        except json.JSONDecodeError as exc:
-            raise RuntimeError("FastMCP returned ticket details that were not valid JSON.") from exc
-        ticket = Ticket.model_validate(ticket_data)
+        """Boss reads the ticket, works it with the team, and records a status."""
+        system = AgentContext(self, ticket_id, "Boss", 0)
+        details = await self.call_shop_tool(system, "get_ticket_details", {"ticket_id": ticket_id})
         result = await self._run_agent(
             "Boss",
-            task="Triage this real open ticket, delegate only necessary specialist work, synthesize the verified findings, and set a supported status when a clear next step is ready.",
-            context=json.dumps(ticket.model_dump(mode="json"), ensure_ascii=False),
+            task=("Work this ticket. Delegate only the specialist work it needs, make the final call, "
+                  "and record the ticket status with update_ticket_status before you answer."),
+            context=details,
             ticket_id=ticket_id,
             depth=0,
         )
-        if result.ticket_status and result.ticket_status != ticket.status:
-            await self.call_shop_tool(
-                system_context,
-                "update_ticket_status",
-                {
-                    "ticket_id": ticket_id,
-                    "status": result.ticket_status,
-                    "resolution": result.summary,
-                },
-            )
-        final_ticket_json = await self.call_shop_tool(
-            system_context,
-            "get_ticket_details",
-            {"ticket_id": ticket_id},
-        )
-        try:
-            final_ticket = Ticket.model_validate(json.loads(final_ticket_json))
-        except (json.JSONDecodeError, ValueError) as exc:
-            raise RuntimeError("FastMCP could not confirm the final ticket record.") from exc
+        ticket = await self._read_ticket(system)
+        if result.ticket_status and ticket.status != result.ticket_status:
+            # Boss named a status in its answer but did not save it; save it once.
+            await self.call_shop_tool(system, "update_ticket_status", {
+                "ticket_id": ticket_id, "status": result.ticket_status, "resolution": _clip(result.summary, 800),
+            })
+            ticket = await self._read_ticket(system)
         self.audit.append(
-            ticket_id=ticket_id,
-            agent_name="Boss",
-            action="ticket_run_completed",
-            reasoning_notes=f"Ticket run completed with status {final_ticket.status}; human approval={result.needs_human_approval}.",
-            depth=0,
+            ticket_id=ticket_id, agent_name="Boss", action="ticket_run_completed",
+            message=_clip(f"Status {ticket.status}. {result.summary}", 4000), model=MODEL_NAME,
+            usage={"agent_turns": self.agent_turns, "requests": self.model_requests,
+                   "total_tokens": self.total_tokens, "mcp_calls": self.mcp_calls},
         )
         return TicketRunResponse(
-            run_id=self.run_id,
-            ticket=final_ticket,
-            result=result,
-            agent_turns=max(self.agent_turns, 1),
-            model_requests=self.model_requests,
-            total_tokens=self.total_tokens,
+            run_id=self.run_id, ticket=ticket, result=result, agent_turns=max(self.agent_turns, 1),
+            model_requests=self.model_requests, total_tokens=self.total_tokens,
         )
 
     async def close(self) -> None:
-        """Close the reusable HTTP client without making a request."""
         await self._openai_client.close()
 
 
@@ -504,10 +369,8 @@ async def run_ticket(ticket_id: int, *, project_root: Path = HW5_DIR) -> TicketR
     run_id = str(uuid4())
     audit = AppendOnlyAuditLogger(run_id)
     audit.append(
-        ticket_id=ticket_id,
-        agent_name="System",
-        action="ticket_run_started",
-        reasoning_notes="Starting one bounded ticket workflow using the local FastMCP server.",
+        ticket_id=ticket_id, agent_name="System", action="ticket_run_started", model=MODEL_NAME,
+        message="Dashboard started the agent team on this ticket (FastMCP over data/campus_customs_new.db).",
     )
     try:
         async with open_mcp_session(project_root) as session:
@@ -518,9 +381,7 @@ async def run_ticket(ticket_id: int, *, project_root: Path = HW5_DIR) -> TicketR
                 await team.close()
     except Exception as exc:
         audit.append(
-            ticket_id=ticket_id,
-            agent_name="System",
-            action="error",
-            reasoning_notes=f"Ticket run stopped with {type(exc).__name__}; prior audit events were preserved.",
+            ticket_id=ticket_id, agent_name="System", action="error",
+            message=_clip(f"Ticket run stopped: {type(exc).__name__}: {exc}", 1000),
         )
         raise

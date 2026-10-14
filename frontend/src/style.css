@@ -293,3 +293,33 @@ button:disabled { cursor: not-allowed; opacity: 0.58; }
   .decision-panel { grid-column: auto; grid-template-columns: minmax(0,1fr); }
   .desk-footer { align-items: flex-start; flex-direction: column; gap: 7px; padding-left: 3px; }
 }
+
+/* Workflow states between open and resolved */
+.status-waiting { color: #9a6700; background: #fff6d6; }
+.status-blocked { color: #b42318; background: #fdecea; }
+
+.ticket-request { display: block; margin-top: 4px; color: var(--muted); font-size: 10px; line-height: 1.4; }
+
+/* One divider per agent run so follow-up runs read separately */
+.run-divider { display: flex; align-items: center; gap: 8px; margin: 10px 0 6px; color: var(--muted); font-size: 9px; font-weight: 700; letter-spacing: .08em; text-transform: uppercase; }
+.run-divider::before, .run-divider::after { content: ""; flex: 1; height: 1px; background: var(--line); }
+
+.finding-list { margin: 6px 0 0; padding-left: 16px; color: #4b5d70; font-size: 9px; line-height: 1.5; }
+.tool-result { margin-top: 4px; font-size: 9px; color: var(--muted); }
+.tool-result summary { cursor: pointer; }
+.tool-result pre { max-height: 140px; overflow: auto; margin: 4px 0 0; padding: 6px 8px; border-radius: 6px; background: var(--surface-soft); white-space: pre-wrap; word-break: break-word; font: 8px/1.4 "Cascadia Code", Consolas, monospace; }
+.tool-error { margin-top: 5px; padding: 6px 8px; border-radius: 6px; color: #b42318; background: #fdecea; font-size: 9px; }
+
+/* The human and the system read differently from the five agents */
+.event-human .speech-bubble, .event-human .thought-bubble { color: #5b21b6; background: #f3edff; border: 1px solid #ddd0fb; font-style: normal; }
+.event-system .thought-bubble { opacity: .75; }
+
+.approver-field { display: flex; align-items: center; gap: 6px; margin: 0 0 12px; color: var(--muted); font-size: 10px; }
+.approver-field input { flex: 1; min-width: 0; padding: 5px 8px; border: 1px solid var(--line); border-radius: 7px; color: var(--text); font: inherit; font-size: 11px; }
+
+.draft-card { padding: 16px; }
+.draft-body { margin-top: 10px; padding: 10px 11px; border: 1px dashed #b9cde0; border-radius: 10px; background: #fbfdff; }
+.draft-meta { display: flex; justify-content: space-between; gap: 8px; color: var(--muted); font-size: 9px; font-weight: 700; }
+.draft-flag { color: #0284c7; letter-spacing: .06em; }
+.draft-body p { margin: 7px 0 0; color: var(--text); font-size: 10px; line-height: 1.55; white-space: pre-wrap; }
+.contribution-tools { color: var(--muted); font-size: 8px !important; font-family: "Cascadia Code", Consolas, monospace; }

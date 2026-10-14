@@ -13,6 +13,7 @@ import {
   Clock3,
   FileText,
   Loader2,
+  Mail,
   MessageCircle,
   Play,
   RotateCcw,
@@ -20,241 +21,153 @@ import {
   ShieldCheck,
   Sparkles,
   Store,
+  UserCheck,
   Users,
   Wallet
 } from "lucide-react";
 
 const API = "http://localhost:8000";
 
-type AgentKey = "boss" | "inventory" | "accounting" | "facilities" | "customer_service";
-type TicketStatus = "open" | "resolved";
+type AgentKey = "boss" | "inventory" | "accounting" | "facilities" | "customer_service" | "human" | "system";
 
 interface Ticket {
   ticket_id: number;
-  description: string;
-  type?: string | null;
-  status: TicketStatus;
-  assigned_agent?: string | null;
+  type: string;
+  requester: string;
+  subject: string;
+  request: string;
+  sku: string | null;
+  size: string | null;
+  qty: number | null;
+  lease_id: number | null;
+  invoice_id: number | null;
+  status: string;
+  board_status: "open" | "resolved";
+  latest_note: string | null;
+  pending_approvals: number;
 }
 
-interface ToolCall {
-  name?: string;
-  arguments?: unknown;
+interface ToolUse {
+  name: string;
+  arguments?: Record<string, unknown> | null;
+  result?: string | null;
 }
 
 interface AgentEvent {
-  timestamp?: string | null;
-  ticket_id?: number | null;
-  active_agent?: string | null;
-  thoughts?: string | null;
-  speech?: string | null;
-  action?: string | null;
-  tool_calls?: ToolCall[];
-  delegation_target?: string | null;
+  timestamp: string | null;
+  run_id: string | null;
+  ticket_id: number | null;
+  agent: string;
+  action: string | null;
+  kind: "speech" | "note";
+  text: string;
+  findings: string[];
+  tool: ToolUse | null;
+  delegation_target: string | null;
 }
 
-interface PaymentProposal {
-  identity: string;
-  kind: "payment" | "purchase_order";
-  payment_id: number | null;
-  amount: number;
-  recipient: string;
-  reason: string;
-  reference_type: string;
-  reference_id: number | null;
+interface Approval {
+  approval_id: number;
   ticket_id: number;
-  status: "PENDING_APPROVAL" | "PAID" | "APPROVED";
-  sku?: string | null;
-  size?: string | null;
-  quantity?: number | null;
-  lead_days?: number | null;
+  kind: "payment" | "purchase_order";
+  amount: number;
+  payee: string | null;
+  reason: string | null;
+  reference: string;
+  waits_for_invoices: number[];
+  status: "pending" | "approved" | "rejected";
+  decided_by: string | null;
+  decision_note: string | null;
 }
 
-interface ApprovalResult {
-  status: string;
-  payment_id?: number;
-  payment_status?: string;
-  purchase_order_id?: number;
-  cash_changed?: boolean;
-  balance: number;
+interface Draft {
+  id: number;
+  ticket_id: number;
+  body: string;
+  requester: string;
+  subject: string;
+  created_at: string;
 }
 
 const AGENTS: Record<AgentKey, { label: string; role: string; color: string; initials: string }> = {
-  boss: { label: "Boss", role: "Executive commander", color: "#1E293B", initials: "B" },
-  inventory: { label: "Inventory", role: "Stockroom logistics", color: "#D97706", initials: "I" },
-  accounting: { label: "Accounting", role: "Financial controller", color: "#059669", initials: "A" },
-  facilities: { label: "Facilities", role: "Physical infrastructure", color: "#475569", initials: "F" },
-  customer_service: { label: "Customer Service", role: "Communications lead", color: "#0284C7", initials: "CS" }
+  boss: { label: "Boss", role: "Routes the work, makes the call", color: "#1E293B", initials: "B" },
+  inventory: { label: "Inventory", role: "Stock and restock", color: "#D97706", initials: "I" },
+  accounting: { label: "Accounting", role: "Cash, invoices, margins", color: "#059669", initials: "A" },
+  facilities: { label: "Facilities", role: "Lease and rent", color: "#475569", initials: "F" },
+  customer_service: { label: "Customer Service", role: "Customer drafts", color: "#0284C7", initials: "CS" },
+  human: { label: "You", role: "Human approver", color: "#7C3AED", initials: "You" },
+  system: { label: "System", role: "Run bookkeeping", color: "#94A3B8", initials: "S" }
+};
+const TEAM: AgentKey[] = ["boss", "inventory", "accounting", "facilities", "customer_service"];
+
+const STATUS_LABELS: Record<string, string> = {
+  open: "OPEN",
+  in_progress: "IN PROGRESS",
+  waiting_approval: "NEEDS APPROVAL",
+  waiting_customer: "WAITING ON CUSTOMER",
+  blocked: "BLOCKED",
+  ready_for_staff: "STAFF REVIEW",
+  resolved: "RESOLVED"
 };
 
-function normalizeAgent(value?: string | null): AgentKey {
-  const name = (value ?? "").toLowerCase().replace(/[^a-z]/g, "");
+const ACTION_LABELS: Record<string, string> = {
+  ticket_run_started: "run started",
+  thinking_started: "picked up the task",
+  delegation: "delegated",
+  tool_call_started: "calling tool",
+  tool_call_completed: "used tool",
+  response_synthesis: "reported back",
+  ticket_run_completed: "closed the run",
+  approval_decided: "approved",
+  database_reset: "reset",
+  error: "problem"
+};
+
+function agentKey(value?: string | null): AgentKey {
+  const name = (value ?? "").toLowerCase();
   if (name.includes("inventory")) return "inventory";
   if (name.includes("account")) return "accounting";
   if (name.includes("facilit")) return "facilities";
-  if (name.includes("customer") || name.includes("service") || name === "cs") return "customer_service";
-  return "boss";
+  if (name.includes("customer")) return "customer_service";
+  if (name.includes("human")) return "human";
+  if (name.includes("boss")) return "boss";
+  return "system";
 }
 
-function asRecord(value: unknown): Record<string, unknown> | null {
-  return value !== null && typeof value === "object" && !Array.isArray(value)
-    ? value as Record<string, unknown>
-    : null;
+function statusClass(status: string): string {
+  if (status === "resolved") return "status-resolved";
+  if (status === "blocked" || status === "ready_for_staff") return "status-blocked";
+  if (status === "open") return "status-open";
+  return "status-waiting";
 }
 
-function textValue(value: unknown): string {
-  return typeof value === "string" ? value : value == null ? "" : String(value);
-}
-
-function displaySummary(value: unknown): string {
-  if (typeof value === "string") return value;
-  const record = asRecord(value);
-  if (record) {
-    const sentence = record.summary ?? record.resolution ?? record.message ?? record.final_decision;
-    if (typeof sentence === "string") return sentence;
-    return JSON.stringify(record) ?? "Run finished.";
-  }
-  return textValue(value);
-}
-
-function parseId(value: unknown): number | null {
-  if (typeof value === "number" && Number.isInteger(value)) return value;
-  if (typeof value === "string") {
-    const match = value.match(/\d+/);
-    if (match) return Number(match[0]);
-  }
-  return null;
-}
-
-function collectPaymentProposals(value: unknown, ticketId: number): PaymentProposal[] {
-  const discovered: PaymentProposal[] = [];
-  const visit = (node: unknown, inheritedTool = "") => {
-    if (Array.isArray(node)) {
-      node.forEach((item) => visit(item, inheritedTool));
-      return;
-    }
-    const record = asRecord(node);
-    if (!record) return;
-
-    const toolName = textValue(record.name ?? record.tool_called ?? record.tool_name ?? inheritedTool);
-    const argumentRecord = asRecord(record.arguments) ?? asRecord(record.args) ?? {};
-    const merged = { ...record, ...argumentRecord };
-    const status = textValue(merged.status ?? merged.payment_status).toUpperCase();
-    const isProposal = toolName.toLowerCase().includes("propose_payment")
-      || status === "PENDING_APPROVAL"
-      || (merged.amount !== undefined && (merged.recipient !== undefined || merged.payee !== undefined)
-        && (merged.reason !== undefined || merged.reference_id !== undefined || merged.ref_id !== undefined));
-    if (isProposal && status !== "PAID" && status !== "APPROVED") {
-      const amount = Number(merged.amount ?? merged.payment_amount);
-      const recipient = textValue(merged.recipient ?? merged.payee ?? merged.vendor_name);
-      const reason = textValue(merged.reason ?? merged.purpose ?? merged.description ?? "Payment proposal");
-      const rawReferenceType = textValue(merged.reference_type ?? merged.ref_type ?? merged.reference_kind);
-      const invoiceReference = merged.invoice_id ?? merged.invoice_reference;
-      const leaseReference = merged.lease_id ?? merged.lease_reference;
-      const rawReferenceId = merged.reference_id ?? merged.ref_id ?? invoiceReference ?? leaseReference ?? merged.reference;
-      const referenceId = parseId(rawReferenceId);
-      const inferredType = leaseReference !== undefined
-        ? "lease"
-        : invoiceReference !== undefined
-          ? "invoice"
-          : /rent|lease/i.test(reason)
-            ? "lease"
-            : /invoice|vendor/i.test(reason)
-              ? "invoice"
-              : "";
-      const referenceType = rawReferenceType || inferredType;
-      const paymentId = parseId(merged.payment_id ?? merged.paymentId ?? merged.proposal_id ?? merged.id);
-      if (Number.isFinite(amount) && amount > 0 && recipient) {
-        const identity = [
-          ticketId,
-          referenceType || "reference",
-          referenceId ?? "unknown",
-          recipient.toLowerCase(),
-          amount.toFixed(2)
-        ].join(":");
-        discovered.push({
-          identity,
-          kind: "payment",
-          payment_id: paymentId,
-          amount,
-          recipient,
-          reason,
-          reference_type: referenceType,
-          reference_id: referenceId,
-          ticket_id: ticketId,
-          status: "PENDING_APPROVAL"
-        });
-      }
-    }
-
-    for (const [key, child] of Object.entries(record)) {
-      if (key === "arguments" || key === "args") continue;
-      visit(child, toolName || inheritedTool);
-    }
-    if (record.arguments || record.args) visit(record.arguments ?? record.args, toolName || inheritedTool);
-  };
-  visit(value);
-  return [...new Map(discovered.map((proposal) => [proposal.identity, proposal])).values()];
-}
-
-function mergeProposals(current: PaymentProposal[], incoming: PaymentProposal[]): PaymentProposal[] {
-  const merged = new Map(current.map((proposal) => [proposal.identity, proposal]));
-  incoming.forEach((proposal) => {
-    const existing = merged.get(proposal.identity);
-    merged.set(proposal.identity, existing
-      ? { ...existing, ...proposal, payment_id: proposal.payment_id ?? existing.payment_id }
-      : proposal);
-  });
-  return [...merged.values()].sort((left, right) => right.ticket_id - left.ticket_id);
-}
-
-function loadPendingPayments(): PaymentProposal[] {
-  try {
-    const stored = window.localStorage.getItem("campus-customs-pending-payments");
-    const parsed: unknown = stored ? JSON.parse(stored) : [];
-    if (!Array.isArray(parsed)) return [];
-    return parsed.filter((item): item is PaymentProposal => {
-      const row = asRecord(item);
-      return Boolean(row)
-        && typeof row?.identity === "string"
-        && typeof row?.amount === "number"
-        && typeof row?.recipient === "string"
-        && typeof row?.ticket_id === "number";
-    }).map((item) => ({ ...item, kind: item.kind === "purchase_order" ? "purchase_order" as const : "payment" as const }));
-  } catch {
-    return [];
-  }
-}
-
-function formatCurrency(value: number | null | undefined): string {
+function money(value: number | null | undefined): string {
   if (value == null || !Number.isFinite(value)) return "—";
   return new Intl.NumberFormat("en-US", { style: "currency", currency: "USD" }).format(value);
 }
 
-function formatTime(value?: string | null): string {
-  if (!value) return "just now";
+function clock(value?: string | null): string {
+  if (!value) return "";
   const date = new Date(value);
-  if (Number.isNaN(date.getTime())) return value;
-  return new Intl.DateTimeFormat("en-US", { hour: "numeric", minute: "2-digit", second: "2-digit" }).format(date);
+  return Number.isNaN(date.getTime())
+    ? value
+    : new Intl.DateTimeFormat("en-US", { hour: "numeric", minute: "2-digit", second: "2-digit" }).format(date);
 }
 
-function initialTicketFromLocation(): number {
+function ticketFromUrl(): number {
   const requested = Number(new URLSearchParams(window.location.search).get("ticket"));
-  return requested === 101 || requested === 102 || requested === 103 ? requested : 101;
+  return [101, 102, 103].includes(requested) ? requested : 101;
 }
 
-async function apiRequest<T>(path: string, options?: RequestInit): Promise<T> {
+async function api<T>(path: string, options?: RequestInit): Promise<T> {
   const response = await fetch(`${API}${path}`, {
     ...options,
-    headers: {
-      "Content-Type": "application/json",
-      ...options?.headers
-    }
+    headers: { "Content-Type": "application/json", ...options?.headers }
   });
   const body = await response.json().catch(() => null);
   if (!response.ok) {
-    const detail = asRecord(body)?.detail;
-    throw new Error(textValue(detail) || `Request failed (${response.status})`);
+    const detail = body && typeof body === "object" && "detail" in body ? String(body.detail) : "";
+    throw new Error(detail || `Request failed (${response.status})`);
   }
   return body as T;
 }
@@ -262,224 +175,145 @@ async function apiRequest<T>(path: string, options?: RequestInit): Promise<T> {
 function App() {
   const [tickets, setTickets] = useState<Ticket[]>([]);
   const [events, setEvents] = useState<AgentEvent[]>([]);
-  const [eventFloor, setEventFloor] = useState<number | null>(null);
-  const [selectedTicketId, setSelectedTicketId] = useState(initialTicketFromLocation);
-  const [completedTicketIds, setCompletedTicketIds] = useState<Set<number>>(new Set());
-  const [approvalNotes, setApprovalNotes] = useState<Record<number, string>>({});
+  const [approvals, setApprovals] = useState<Approval[]>([]);
+  const [drafts, setDrafts] = useState<Draft[]>([]);
   const [balance, setBalance] = useState<number | null>(null);
-  const [pendingPayments, setPendingPayments] = useState<PaymentProposal[]>(loadPendingPayments);
-  const [approvedPayments, setApprovedPayments] = useState<PaymentProposal[]>([]);
-  const [activeRunTicket, setActiveRunTicket] = useState<number | null>(null);
-  const [approvingIdentity, setApprovingIdentity] = useState<string | null>(null);
+  const [deskDate, setDeskDate] = useState("");
+  const [selectedId, setSelectedId] = useState(ticketFromUrl);
+  const [runningId, setRunningId] = useState<number | null>(null);
+  const [approvingId, setApprovingId] = useState<number | null>(null);
+  const [approver, setApprover] = useState(() => window.localStorage.getItem("cc-approver") || "Store manager");
   const [loading, setLoading] = useState(true);
   const [resetting, setResetting] = useState(false);
   const [error, setError] = useState("");
   const [notice, setNotice] = useState("");
 
-  const refreshTickets = useCallback(async () => {
-    const rows = await apiRequest<Ticket[]>("/api/tickets");
-    setTickets(rows);
-    return rows;
+  const refreshDesk = useCallback(async () => {
+    const [ticketRows, approvalRows, cash] = await Promise.all([
+      api<Ticket[]>("/api/tickets"),
+      api<Approval[]>("/api/approvals"),
+      api<{ balance: number; desk_date: string }>("/api/cash/balance")
+    ]);
+    setTickets(ticketRows);
+    setApprovals(approvalRows);
+    setBalance(cash.balance);
+    setDeskDate(cash.desk_date);
   }, []);
 
-  const refreshBalance = useCallback(async () => {
-    const result = await apiRequest<{ account_name: string; balance: number }>("/api/cash/balance");
-    setBalance(result.balance);
-  }, []);
-
-  const refreshEvents = useCallback(async () => {
-    const rows = await apiRequest<AgentEvent[]>("/api/events?limit=200");
-    const visibleRows = eventFloor === null ? rows : rows.filter((event) => {
-      const timestamp = event.timestamp ? new Date(event.timestamp).getTime() : 0;
-      return Number.isFinite(timestamp) && timestamp >= eventFloor;
-    });
-    setEvents(visibleRows);
-    return visibleRows;
-  }, [eventFloor]);
-
-  const refreshApprovals = useCallback(async () => {
-    const rows = await apiRequest<Array<Record<string, unknown>>>('/api/approvals?limit=200');
-    const approvals: PaymentProposal[] = rows.flatMap((row) => {
-      const approvalId = parseId(row.approval_id ?? row.payment_id);
-      const ticketId = parseId(row.ticket_id);
-      const amount = Number(row.amount);
-      const kind = textValue(row.kind).toLowerCase() === 'purchase_order' ? 'purchase_order' : 'payment';
-      const recipient = textValue(row.recipient);
-      if (approvalId == null || ticketId == null || !Number.isFinite(amount) || amount <= 0 || !recipient) return [];
-      const state = textValue(row.status).toUpperCase();
-      const identity = `${kind}:${approvalId}`;
-      return [{
-        identity,
-        kind,
-        payment_id: approvalId,
-        amount,
-        recipient,
-        reason: textValue(row.reason) || (kind === 'purchase_order' ? 'Purchase order for staff review' : 'Payment proposal'),
-        reference_type: textValue(row.reference_type),
-        reference_id: parseId(row.reference_id),
-        ticket_id: ticketId,
-        status: state === 'PENDING_APPROVAL' ? 'PENDING_APPROVAL' : state === 'PAID' ? 'PAID' : 'APPROVED',
-        sku: row.sku == null ? null : textValue(row.sku),
-        size: row.size == null ? null : textValue(row.size),
-        quantity: row.quantity == null ? null : parseId(row.quantity),
-        lead_days: row.lead_days == null ? null : parseId(row.lead_days),
-      }];
-    });
-    setPendingPayments(approvals.filter((row) => row.status === 'PENDING_APPROVAL'));
-    setApprovedPayments(approvals.filter((row) => row.status !== 'PENDING_APPROVAL'));
-    return approvals;
+  const refreshTicket = useCallback(async (ticketId: number) => {
+    const [eventRows, draftRows] = await Promise.all([
+      api<AgentEvent[]>(`/api/events?ticket_id=${ticketId}`),
+      api<Draft[]>(`/api/drafts?ticket_id=${ticketId}`)
+    ]);
+    setEvents(eventRows);
+    setDrafts(draftRows);
   }, []);
 
   useEffect(() => {
-    window.localStorage.setItem("campus-customs-pending-payments", JSON.stringify(pendingPayments));
-  }, [pendingPayments]);
+    refreshDesk()
+      .catch((reason: unknown) => setError(reason instanceof Error ? reason.message : "Could not reach the backend on port 8000."))
+      .finally(() => setLoading(false));
+  }, [refreshDesk]);
 
   useEffect(() => {
-    let mounted = true;
-    Promise.all([refreshTickets(), refreshBalance(), refreshEvents(), refreshApprovals()])
-      .catch((reason: unknown) => {
-        if (mounted) setError(reason instanceof Error ? reason.message : "Could not connect to the operations API.");
-      })
-      .finally(() => {
-        if (mounted) setLoading(false);
-      });
-    return () => { mounted = false; };
-  }, [refreshApprovals, refreshBalance, refreshEvents, refreshTickets]);
+    void refreshTicket(selectedId).catch(() => undefined);
+  }, [refreshTicket, selectedId]);
 
   useEffect(() => {
-    if (activeRunTicket === null) return;
+    window.localStorage.setItem("cc-approver", approver);
+  }, [approver]);
+
+  // While the team works, poll the audit trail so each agent's step shows up live.
+  useEffect(() => {
+    if (runningId === null) return;
     const timer = window.setInterval(() => {
-      void Promise.all([refreshEvents(), refreshApprovals()]).catch((reason: unknown) => {
-        setError(reason instanceof Error ? reason.message : "Could not refresh agent activity.");
-      });
-    }, 900);
+      void Promise.all([refreshTicket(runningId), refreshDesk()]).catch(() => undefined);
+    }, 1000);
     return () => window.clearInterval(timer);
-  }, [activeRunTicket, refreshApprovals, refreshEvents]);
+  }, [runningId, refreshDesk, refreshTicket]);
 
-  const selectedTicket = tickets.find((ticket) => ticket.ticket_id === selectedTicketId);
-  const ticketEvents = useMemo(
-    () => events.filter((event) => event.ticket_id === selectedTicketId),
-    [events, selectedTicketId]
+  const ticket = tickets.find((row) => row.ticket_id === selectedId);
+  const ticketApprovals = approvals.filter((row) => row.ticket_id === selectedId);
+  const pending = ticketApprovals.filter((row) => row.status === "pending");
+  const decided = ticketApprovals.filter((row) => row.status !== "pending");
+  const pendingInvoiceIds = new Set(
+    approvals.filter((row) => row.kind === "payment" && row.status === "pending" && row.reference.startsWith("invoice"))
+      .map((row) => Number(row.reference.replace(/\D/g, "")))
   );
-  const ticketPayments = pendingPayments.filter(
-    (payment) => payment.ticket_id === selectedTicketId && payment.status === "PENDING_APPROVAL"
-  );
-  const involvedAgents = [...new Set(ticketEvents.map((event) => normalizeAgent(event.active_agent)))];
 
-  const visibleStatus: TicketStatus = selectedTicket && completedTicketIds.has(selectedTicket.ticket_id)
-    ? "resolved"
-    : selectedTicket?.status ?? "open";
+  const visibleEvents = useMemo(() => events.filter((event, index) => {
+    if (event.action !== "tool_call_started") return true;
+    return runningId === selectedId && index === events.length - 1;
+  }), [events, runningId, selectedId]);
+
+  const involved = new Set(events.map((event) => agentKey(event.agent)));
+  const contributions = TEAM.filter((key) => involved.has(key)).map((key) => {
+    const mine = events.filter((event) => agentKey(event.agent) === key);
+    const report = [...mine].reverse().find((event) => event.action === "response_synthesis");
+    const tools = [...new Set(mine.map((event) => event.tool?.name).filter(Boolean))] as string[];
+    return { key, report: report?.text ?? "Working…", tools, steps: mine.length };
+  });
+
+  const status = ticket?.status ?? "open";
+  const canResume = status === "waiting_approval" && pending.length === 0 && decided.length > 0;
+  const runLabel = runningId === selectedId
+    ? "Agents at work"
+    : pending.length > 0
+      ? "Approve requests first"
+      : canResume
+        ? "Resume team to close"
+        : status === "resolved" ? "Run again" : "Dispatch agents";
 
   async function handleRun(ticketId: number) {
     setError("");
     setNotice("");
-    setActiveRunTicket(ticketId);
-    setSelectedTicketId(ticketId);
-    const runStartedAt = Date.now() - 1000;
+    setRunningId(ticketId);
+    setSelectedId(ticketId);
     try {
-      const result = await apiRequest<Record<string, unknown>>(`/api/tickets/${ticketId}/run`, {
-        method: "POST"
-      });
-      const outputProposals = collectPaymentProposals(result, ticketId);
-      setPendingPayments((current) => mergeProposals(current, outputProposals));
-      const summary = displaySummary(result.resolution ?? result.summary);
-      setNotice(summary || `Ticket ${ticketId} has completed its agent run.`);
-      const [latestEvents, , latestApprovals] = await Promise.all([refreshEvents(), refreshTickets(), refreshApprovals()]);
-      const traceProposals = latestEvents.flatMap((event) =>
-        event.ticket_id == null || !event.timestamp || new Date(event.timestamp).getTime() < runStartedAt
-          ? []
-          : collectPaymentProposals(event, event.ticket_id)
-      );
-      const hasPendingApproval = latestApprovals.some(
-        (proposal) => proposal.ticket_id === ticketId && proposal.status === "PENDING_APPROVAL"
-      ) || [...outputProposals, ...traceProposals]
-        .some((proposal) => proposal.ticket_id === ticketId && proposal.status === "PENDING_APPROVAL");
-      if (!hasPendingApproval) {
-        setCompletedTicketIds((current) => new Set(current).add(ticketId));
-        setTickets((current) => current.map((ticket) =>
-          ticket.ticket_id === ticketId ? { ...ticket, status: "resolved" as const } : ticket
-        ));
-      }
+      const result = await api<{ status: string; summary: string; total_tokens: number }>(`/api/tickets/${ticketId}/run`, { method: "POST" });
+      setNotice(`Ticket ${ticketId} → ${STATUS_LABELS[result.status] ?? result.status}. ${result.summary}`);
     } catch (reason) {
       setError(reason instanceof Error ? reason.message : "The ticket run failed.");
     } finally {
-      setActiveRunTicket(null);
+      setRunningId(null);
+      await Promise.all([refreshDesk(), refreshTicket(ticketId)]).catch(() => undefined);
     }
   }
 
-  async function handleApprove(proposal: PaymentProposal) {
-    if (proposal.payment_id == null || proposal.reference_id == null || !proposal.reference_type) return;
+  async function handleApprove(item: Approval) {
     setError("");
     setNotice("");
-    setApprovingIdentity(proposal.identity);
+    setApprovingId(item.approval_id);
     try {
-      const isPurchaseOrder = proposal.kind === "purchase_order";
-      const result = await apiRequest<ApprovalResult>(
-        isPurchaseOrder ? "/api/purchase-orders/approve" : "/api/payments/approve",
-        {
-          method: "POST",
-          body: JSON.stringify(isPurchaseOrder
-            ? { approval_id: proposal.payment_id, approved_by: "Desk Operator" }
-            : {
-                payment_id: proposal.payment_id,
-                amount: proposal.amount,
-                recipient: proposal.recipient,
-                reference_type: proposal.reference_type,
-                reference_id: proposal.reference_id
-              })
-        }
-      );
-      const approvedStatus = isPurchaseOrder ? "APPROVED" : "PAID";
-      setPendingPayments((current) => current.filter((item) => item.identity !== proposal.identity));
-      setApprovedPayments((current) => [{ ...proposal, status: approvedStatus }, ...current.filter((item) => item.identity !== proposal.identity)]);
-      setApprovalNotes((current) => ({
-        ...current,
-        [proposal.ticket_id]: isPurchaseOrder
-          ? `Purchase order approved for staff handoff; no vendor contact or shipment is claimed.`
-          : `Payment approved · ${formatCurrency(proposal.amount)} recorded; follow-up may continue.`
-      }));
-      setNotice(isPurchaseOrder
-        ? `Purchase order approved for internal staff handoff. Checking balance remains ${formatCurrency(result.balance)}.`
-        : `Disbursement recorded. New checking balance: ${formatCurrency(result.balance)}.`);
-      await Promise.all([refreshBalance(), refreshTickets(), refreshEvents(), refreshApprovals()]);
+      const result = await api<{ effect: string; balance: number }>(`/api/approvals/${item.approval_id}/approve`, {
+        method: "POST",
+        body: JSON.stringify({ approved_by: approver.trim() || "Store manager" })
+      });
+      setNotice(`Approved ${money(item.amount)} · ${result.effect}. Checking is now ${money(result.balance)}.`);
     } catch (reason) {
-      setError(reason instanceof Error ? reason.message : "Payment approval failed.");
+      setError(reason instanceof Error ? reason.message : "Approval failed.");
     } finally {
-      setApprovingIdentity(null);
+      setApprovingId(null);
+      await Promise.all([refreshDesk(), refreshTicket(item.ticket_id)]).catch(() => undefined);
     }
   }
 
   async function handleReset() {
-    if (!window.confirm("Reset the working database to its pristine state? This clears current ticket and payment changes.")) return;
+    if (!window.confirm("Reset the working database to the original? All approvals, payments and drafts in the working copy are cleared.")) return;
     setResetting(true);
     setError("");
-    setNotice("");
     try {
-      const result = await apiRequest<{ status: string; message: string }>("/api/database/reset", { method: "POST" });
-      setPendingPayments([]);
-      setApprovedPayments([]);
-      setCompletedTicketIds(new Set<number>());
-      setApprovalNotes({});
-      setEventFloor(Date.now());
-      setEvents([]);
-      await Promise.all([refreshTickets(), refreshBalance(), refreshApprovals()]);
-      setNotice(result.message);
+      const result = await api<{ balance: number }>("/api/database/reset", { method: "POST" });
+      setNotice(`Desk reset. Starting checking balance ${money(result.balance)}.`);
+      await Promise.all([refreshDesk(), refreshTicket(selectedId)]);
     } catch (reason) {
-      setError(reason instanceof Error ? reason.message : "Database reset failed.");
+      setError(reason instanceof Error ? reason.message : "Reset failed.");
     } finally {
       setResetting(false);
     }
   }
 
-  const agentSummaries = involvedAgents.map((key) => {
-    const entries = ticketEvents.filter((event) => normalizeAgent(event.active_agent) === key);
-    const latestSpeech = [...entries].reverse().find((event) => event.speech || event.thoughts);
-    const tools = [...new Set(entries.flatMap((event) => (event.tool_calls ?? []).map((call) => textValue(call.name)).filter(Boolean)))];
-    const fallback = tools.length
-      ? `Used ${tools.join(", ")} to move this ticket forward.`
-      : entries.at(-1)?.action?.replaceAll("_", " ") || "Contributed to triage and resolution.";
-    return { key, entries, summary: latestSpeech?.speech || latestSpeech?.thoughts || fallback };
-  });
+  let lastRun: string | null = null;
 
   return (
     <div className="app-shell">
@@ -488,21 +322,21 @@ function App() {
           <span className="brand-mark"><Store size={19} strokeWidth={2.2} /></span>
           <span className="brand-copy">
             <strong>Campus Customs</strong>
-                  <span>OPERATIONS DESK <i>•</i> CAMPUS SHOP</span>
+            <span>OPERATIONS DESK <i>•</i> CHAPEL STREET</span>
           </span>
         </a>
         <div className="topbar-center">
           <span className="live-dot" />
-          <span>Local operations environment</span>
+          <span>Desk date {deskDate || "…"}</span>
           <span className="divider-dot">/</span>
-          <span className="desk-open">Desk open</span>
+          <span className="desk-open">gpt-6-luna team</span>
         </div>
         <div className="topbar-actions">
           <div className="balance-pill" aria-live="polite">
             <span className="balance-icon"><Wallet size={16} /></span>
-            <span className="balance-copy"><small>CHECKING BALANCE</small><strong>{formatCurrency(balance)}</strong></span>
+            <span className="balance-copy"><small>CHECKING BALANCE</small><strong>{money(balance)}</strong></span>
           </div>
-          <button className="reset-button" onClick={() => void handleReset()} disabled={resetting}>
+          <button className="reset-button" onClick={() => void handleReset()} disabled={resetting || runningId !== null}>
             {resetting ? <Loader2 className="spin" size={15} /> : <RotateCcw size={15} />}
             <span>{resetting ? "Resetting" : "Reset desk"}</span>
           </button>
@@ -514,11 +348,11 @@ function App() {
           <div>
             <div className="eyebrow"><span className="eyebrow-line" /> STORE MANAGER WORKSPACE</div>
             <h1>Campus Customs <em>Operations Desk</em></h1>
-            <p className="heading-subtitle">Three open matters, one coordinated team. Review the work as it happens.</p>
+            <p className="heading-subtitle">Three open tickets, five agents. Watch them work, then sign off on the money.</p>
           </div>
           <div className="header-stamp">
             <span className="stamp-icon"><ShieldCheck size={18} /></span>
-            <span><strong>Human-led decisions</strong><small>Payments wait for your approval</small></span>
+            <span><strong>Nothing pays without you</strong><small>Agents stage it, you approve it</small></span>
           </div>
         </section>
 
@@ -529,31 +363,31 @@ function App() {
           <aside className="ticket-rail panel">
             <div className="panel-heading rail-heading">
               <div><span className="section-kicker">INBOUND</span><h2>Ticket stack</h2></div>
-              <span className="count-badge">{tickets.length || 3}</span>
+              <span className="count-badge">{tickets.filter((row) => row.board_status === "open").length} open</span>
             </div>
-            <p className="panel-intro">Choose a ticket to inspect its workstream.</p>
+            <p className="panel-intro">Pick a ticket to see its workstream.</p>
             <div className="ticket-list">
-              {[101, 102, 103].map((ticketId, index) => {
-                const ticket = tickets.find((row) => row.ticket_id === ticketId);
-                const status: TicketStatus = completedTicketIds.has(ticketId) ? "resolved" : ticket?.status ?? "open";
-                const isSelected = selectedTicketId === ticketId;
+              {[101, 102, 103].map((id) => {
+                const row = tickets.find((item) => item.ticket_id === id);
+                const rowStatus = row?.status ?? "open";
                 return (
                   <button
-                    className={`ticket-card ${isSelected ? "selected" : ""}`}
-                    key={ticketId}
-                    onClick={() => { setSelectedTicketId(ticketId); setError(""); setNotice(""); }}
-                    aria-pressed={isSelected}
+                    className={`ticket-card ${selectedId === id ? "selected" : ""}`}
+                    key={id}
+                    onClick={() => { setSelectedId(id); setError(""); setNotice(""); }}
+                    aria-pressed={selectedId === id}
                   >
                     <div className="ticket-card-top">
-                      <span className="ticket-number">CC–{ticketId}</span>
-                      <span className={`status-badge status-${status}`}><i />{status === "open" ? "OPEN" : "RESOLVED"}</span>
+                      <span className="ticket-number">CC–{id}</span>
+                      <span className={`status-badge ${statusClass(rowStatus)}`}><i />{STATUS_LABELS[rowStatus] ?? rowStatus}</span>
                     </div>
-                    <strong className="ticket-title">{ticket?.description || (loading ? "Loading ticket details…" : fallbackTicketTitle(ticketId))}</strong>
+                    <strong className="ticket-title">{row ? `${row.subject} · ${row.requester}` : loading ? "Loading…" : "Unavailable"}</strong>
+                    <span className="ticket-request">{row?.request}</span>
                     <div className="ticket-card-bottom">
-                      <span className="ticket-type">{ticket?.type || ["Customer order", "Ticket review", "Store request"][index]}</span>
-                      <ChevronRight className={isSelected ? "chevron-active" : ""} size={16} />
+                      <span className="ticket-type">{row?.type.replace("_", " ")}{row?.pending_approvals ? ` · ${row.pending_approvals} to approve` : ""}</span>
+                      <ChevronRight className={selectedId === id ? "chevron-active" : ""} size={16} />
                     </div>
-                    {activeRunTicket === ticketId && <div className="ticket-running"><span className="mini-pulse" /> Team working</div>}
+                    {runningId === id && <div className="ticket-running"><span className="mini-pulse" /> Team working</div>}
                   </button>
                 );
               })}
@@ -561,100 +395,109 @@ function App() {
 
             <div className="rail-note">
               <div className="note-icon"><Sparkles size={15} /></div>
-              <div><strong>Full team access</strong><span>Specialists can collaborate across the desk when the ticket needs them.</span></div>
+              <div><strong>Any agent can call any other</strong><span>Boss starts every ticket; specialists hand work to each other when the facts call for it.</span></div>
             </div>
 
             <div className="rail-footer">
               <span className="tiny-ledger"><FileText size={14} /> AUDIT TRAIL</span>
-              <span>{events.length} steps logged</span>
+              <span>{events.length} steps on CC–{selectedId}</span>
             </div>
           </aside>
 
           <section className="activity-panel panel">
             <div className="panel-heading activity-heading">
               <div><span className="section-kicker">COLLABORATION</span><h2>Agent live stream</h2></div>
-              <div className={activeRunTicket === selectedTicketId ? "stream-state is-live" : "stream-state"}>
-                <span className="state-dot" />{activeRunTicket === selectedTicketId ? "LIVE" : "READY"}
+              <div className={runningId === selectedId ? "stream-state is-live" : "stream-state"}>
+                <span className="state-dot" />{runningId === selectedId ? "LIVE" : "READY"}
               </div>
             </div>
             <div className="agent-roster" aria-label="Agent team">
-              {(Object.keys(AGENTS) as AgentKey[]).map((key) => {
-                const agent = AGENTS[key];
-                const isInvolved = involvedAgents.includes(key);
-                const isActive = ticketEvents.some((event) => normalizeAgent(event.active_agent) === key && activeRunTicket === selectedTicketId);
-                return (
-                  <div className={`roster-agent ${isInvolved ? "roster-involved" : ""} ${isActive ? "roster-active" : ""}`} key={key}>
-                    <span className="avatar-small" style={{ "--agent-color": agent.color } as CSSProperties}>{agent.initials}</span>
-                    <span>{agent.label}</span>
-                  </div>
-                );
-              })}
+              {TEAM.map((key) => (
+                <div className={`roster-agent ${involved.has(key) ? "roster-involved" : ""}`} key={key} title={AGENTS[key].role}>
+                  <span className="avatar-small" style={{ "--agent-color": AGENTS[key].color } as CSSProperties}>{AGENTS[key].initials}</span>
+                  <span>{AGENTS[key].label}</span>
+                </div>
+              ))}
             </div>
             <div className="stream-context">
               <div className="context-title">
-                <span className="context-ticket">CC–{selectedTicketId}</span>
-                <span className="context-description">{selectedTicket?.description || fallbackTicketTitle(selectedTicketId)}</span>
+                <span className="context-ticket">CC–{selectedId}</span>
+                <span className="context-description">{ticket ? `${ticket.subject}: ${ticket.request}` : ""}</span>
               </div>
-              <button className="run-button" onClick={() => void handleRun(selectedTicketId)} disabled={activeRunTicket !== null || loading}>
-                {activeRunTicket === selectedTicketId ? <Loader2 className="spin" size={16} /> : <Send size={15} />}
-                {activeRunTicket === selectedTicketId ? "Agents at work" : "Dispatch agents"}
+              <button
+                className="run-button"
+                onClick={() => void handleRun(selectedId)}
+                disabled={runningId !== null || loading || pending.length > 0}
+              >
+                {runningId === selectedId ? <Loader2 className="spin" size={16} /> : <Send size={15} />}
+                {runLabel}
               </button>
             </div>
 
             <div className="activity-feed" aria-live="polite">
-              {ticketEvents.length === 0 && activeRunTicket !== selectedTicketId && (
+              {visibleEvents.length === 0 && runningId !== selectedId && (
                 <div className="feed-empty">
                   <div className="empty-orbit"><Activity size={23} /></div>
                   <strong>The desk is waiting</strong>
-                  <span>Dispatch the team to see delegation, decisions and tool calls appear here.</span>
-                  <button onClick={() => void handleRun(selectedTicketId)} disabled={activeRunTicket !== null || loading}>
+                  <span>Dispatch the team to watch delegations, tool calls and decisions appear here.</span>
+                  <button onClick={() => void handleRun(selectedId)} disabled={runningId !== null || loading}>
                     <Play size={14} fill="currentColor" /> Run this ticket
                   </button>
                 </div>
               )}
-
-              {activeRunTicket === selectedTicketId && ticketEvents.length === 0 && (
-                <div className="feed-loading"><span className="loader-ring" /><div><strong>Opening the workstream…</strong><span>Listening for the first agent event</span></div></div>
+              {runningId === selectedId && visibleEvents.length === 0 && (
+                <div className="feed-loading"><span className="loader-ring" /><div><strong>Starting the team…</strong><span>Waiting for Boss to read the ticket</span></div></div>
               )}
 
-              {ticketEvents.map((event, index) => {
-                const key = normalizeAgent(event.active_agent);
+              {visibleEvents.map((event, index) => {
+                const key = agentKey(event.agent);
                 const agent = AGENTS[key];
-                const tools = event.tool_calls ?? [];
+                const newRun = event.run_id !== lastRun && event.action === "ticket_run_started";
+                lastRun = event.run_id;
                 return (
-                  <article className="event-row" key={`${event.timestamp ?? "event"}-${index}`}>
-                    <div className="event-timeline">
-                      <span className="avatar-event" style={{ "--agent-color": agent.color } as CSSProperties}>{agent.initials}</span>
-                      {index < ticketEvents.length - 1 && <span className="timeline-stem" />}
-                    </div>
-                    <div className="event-content">
-                      <div className="event-meta">
-                        <strong style={{ color: agent.color }}>{agent.label}</strong>
-                        <span className="event-action">{(event.action || "working").replaceAll("_", " ")}</span>
-                        <time>{formatTime(event.timestamp)}</time>
+                  <div key={`${event.run_id}-${event.timestamp}-${index}`}>
+                    {newRun && <div className="run-divider"><span>Run started {clock(event.timestamp)}</span></div>}
+                    <article className={`event-row event-${key}`}>
+                      <div className="event-timeline">
+                        <span className="avatar-event" style={{ "--agent-color": agent.color } as CSSProperties}>{agent.initials}</span>
+                        {index < visibleEvents.length - 1 && <span className="timeline-stem" />}
                       </div>
-                      {event.delegation_target && (
-                        <div className="delegation-line"><ArrowRight size={13} /> Handed to <strong>{AGENTS[normalizeAgent(event.delegation_target)].label}</strong></div>
-                      )}
-                      {(event.thoughts || event.speech) && (
-                        <div className={event.speech ? "speech-bubble" : "thought-bubble"}>
-                          {event.speech ? <MessageCircle size={14} /> : <Sparkles size={13} />}
-                          <span>{event.speech || event.thoughts}</span>
+                      <div className="event-content">
+                        <div className="event-meta">
+                          <strong style={{ color: agent.color }}>{agent.label}</strong>
+                          <span className="event-action">{ACTION_LABELS[event.action ?? ""] ?? event.action}</span>
+                          <time>{clock(event.timestamp)}</time>
                         </div>
-                      )}
-                      {tools.map((tool, toolIndex) => (
-                        <div className="tool-chip" key={`${tool.name ?? "tool"}-${toolIndex}`}>
-                          <span className="tool-glyph"><Box size={13} /></span>
-                          <strong>{tool.name || "Tool call"}</strong>
-                          {tool.arguments != null && <code>{typeof tool.arguments === "string" ? tool.arguments : JSON.stringify(tool.arguments)}</code>}
-                        </div>
-                      ))}
-                    </div>
-                  </article>
+                        {event.delegation_target && (
+                          <div className="delegation-line"><ArrowRight size={13} /> Handed to <strong>{AGENTS[agentKey(event.delegation_target)].label}</strong></div>
+                        )}
+                        {event.text && !event.tool && (
+                          <div className={event.kind === "speech" ? "speech-bubble" : "thought-bubble"}>
+                            {event.kind === "speech" ? <MessageCircle size={14} /> : <Sparkles size={13} />}
+                            <span>{event.text}</span>
+                          </div>
+                        )}
+                        {event.findings.length > 0 && (
+                          <ul className="finding-list">{event.findings.map((finding, i) => <li key={i}>{finding}</li>)}</ul>
+                        )}
+                        {event.tool && (
+                          <div className="tool-chip">
+                            <span className="tool-glyph"><Box size={13} /></span>
+                            <strong>{event.tool.name}</strong>
+                            {event.tool.arguments && <code>{JSON.stringify(event.tool.arguments)}</code>}
+                          </div>
+                        )}
+                        {event.tool?.result && (
+                          <details className="tool-result"><summary>MCP result</summary><pre>{event.tool.result}</pre></details>
+                        )}
+                        {event.tool && event.action === "error" && <div className="tool-error">{event.text}</div>}
+                      </div>
+                    </article>
+                  </div>
                 );
               })}
             </div>
-            <div className="activity-footer"><span><span className="live-dot" /> Events refresh every 0.9 seconds while the team is running</span><span>{ticketEvents.length} events</span></div>
+            <div className="activity-footer"><span><span className="live-dot" /> Refreshes every second while the team is running</span><span>{visibleEvents.length} events</span></div>
           </section>
 
           <aside className="decision-panel">
@@ -663,30 +506,36 @@ function App() {
                 <div><span className="section-kicker">YOUR DESK</span><h2>Human decisions</h2></div>
                 <span className="lock-badge"><ShieldCheck size={15} /> HITL</span>
               </div>
+              <label className="approver-field">
+                <UserCheck size={14} />
+                <span>Approving as</span>
+                <input value={approver} onChange={(event) => setApprover(event.target.value)} maxLength={60} />
+              </label>
 
-              {ticketPayments.length > 0 ? (
+              {pending.length > 0 ? (
                 <div className="approval-stack">
-                  {ticketPayments.map((proposal) => {
-                    const canApprove = proposal.payment_id != null && proposal.reference_id != null && Boolean(proposal.reference_type);
+                  {pending.map((item) => {
+                    const isOrder = item.kind === "purchase_order";
+                    const waiting = item.waits_for_invoices.filter((id) => pendingInvoiceIds.has(id));
+                    const short = balance != null && item.amount > balance;
                     return (
-                      <div className="approval-card" key={proposal.identity}>
-                        <div className="approval-topline"><span className="approval-alert"><Clock3 size={13} /> {proposal.kind === "purchase_order" ? "PURCHASE ORDER · YOUR REVIEW" : "PAYMENT · YOUR REVIEW"}</span><span className="pending-dot" /></div>
-                        <div className="approval-amount">{formatCurrency(proposal.amount)}</div>
-                        <div className="approval-payee"><span className="payee-icon">{proposal.kind === "purchase_order" ? <Box size={15} /> : <Banknote size={15} />}</span><span><small>{proposal.kind === "purchase_order" ? "VENDOR CANDIDATE" : "PAY TO"}</small><strong>{proposal.recipient}</strong></span></div>
-                        <div className="approval-reason"><span>Purpose</span><strong>{proposal.reason}</strong></div>
-                        {proposal.kind === "purchase_order" && proposal.sku && <div className="approval-reason"><span>Order details</span><strong>{proposal.quantity} × {proposal.sku} / {proposal.size}; {proposal.lead_days}-day recorded lead</strong></div>}
-                        <div className="approval-reason"><span>{proposal.reference_type ? `${proposal.reference_type} reference` : "Reference"}</span><strong>{proposal.reference_id ?? "Awaiting reference ID"}</strong></div>
-                        <div className="balance-impact"><span><ArrowDownRight size={15} /> {proposal.kind === "purchase_order" ? "Cash on approval" : "Balance after approval"}</span><strong>{balance == null ? "—" : formatCurrency(proposal.kind === "purchase_order" ? balance : balance - proposal.amount)}</strong></div>
+                      <div className="approval-card" key={item.approval_id}>
+                        <div className="approval-topline"><span className="approval-alert"><Clock3 size={13} /> {isOrder ? "PURCHASE ORDER" : "PAYMENT"} #{item.approval_id}</span><span className="pending-dot" /></div>
+                        <div className="approval-amount">{money(item.amount)}</div>
+                        <div className="approval-payee"><span className="payee-icon">{isOrder ? <Box size={15} /> : <Banknote size={15} />}</span><span><small>{isOrder ? "ORDER FROM" : "PAY TO"}</small><strong>{item.payee}</strong></span></div>
+                        <div className="approval-reason"><span>Why</span><strong>{item.reason}</strong></div>
+                        <div className="approval-reason"><span>Reference</span><strong>{item.reference}</strong></div>
+                        {waiting.length > 0 && <p className="approval-missing">Waits for invoice {waiting.join(", ")}: approve that payment first.</p>}
+                        {short && <p className="approval-missing">Checking can't cover this. The approve route will refuse it.</p>}
+                        <div className="balance-impact"><span><ArrowDownRight size={15} /> Checking after approval</span><strong>{balance == null ? "—" : money(balance - item.amount)}</strong></div>
                         <button
                           className="approve-button"
-                          onClick={() => void handleApprove(proposal)}
-                          disabled={!canApprove || approvingIdentity !== null || activeRunTicket !== null}
-                          title={!canApprove ? "The approval is missing its stored reference details." : proposal.kind === "purchase_order" ? "Approve the internal purchase handoff; no supplier contact will be made" : "Approve and record this disbursement"}
+                          onClick={() => void handleApprove(item)}
+                          disabled={approvingId !== null || runningId !== null}
                         >
-                          {approvingIdentity === proposal.identity ? <Loader2 className="spin" size={16} /> : <Check size={16} />}
-                          {proposal.kind === "purchase_order" ? "Approve purchase order" : "Approve disbursement"}
+                          {approvingId === item.approval_id ? <Loader2 className="spin" size={16} /> : <Check size={16} />}
+                          {isOrder ? "Approve purchase order" : "Approve payment"}
                         </button>
-                        {!canApprove && <p className="approval-missing">The proposal is visible, but approval details are incomplete in the agent trace.</p>}
                       </div>
                     );
                   })}
@@ -694,53 +543,69 @@ function App() {
               ) : (
                 <div className="decision-empty">
                   <span className="decision-empty-icon"><ShieldCheck size={20} /></span>
-                  <strong>No approval waiting</strong>
-                  <span>Any proposed payment will pause here until you review it.</span>
+                  <strong>Nothing waiting on you</strong>
+                  <span>When Accounting stages a payment or an order, it stops here until you approve it.</span>
                 </div>
               )}
 
-              {approvedPayments.length > 0 && (
+              {decided.length > 0 && (
                 <div className="approved-list">
-                  <div className="ledger-title"><span><CheckCircle2 size={14} /> RECENTLY APPROVED</span></div>
-                  {approvedPayments.slice(0, 3).map((payment) => (
-                    <div className="approved-row" key={payment.identity}>
+                  <div className="ledger-title"><span><CheckCircle2 size={14} /> APPROVED ON THIS TICKET</span></div>
+                  {decided.map((item) => (
+                    <div className="approved-row" key={item.approval_id}>
                       <span className="approved-check"><Check size={12} /></span>
-                      <span><strong>{payment.recipient}</strong><small>Ticket {payment.ticket_id} · {payment.reason}</small></span>
-                      <b>{payment.kind === "purchase_order" ? "NO DEBIT" : `−${formatCurrency(payment.amount)}`}</b>
+                      <span><strong>{item.payee}</strong><small>{item.decided_by} · {item.reference}</small></span>
+                      <b>−{money(item.amount)}</b>
                     </div>
                   ))}
                 </div>
               )}
             </section>
 
+            {drafts.length > 0 && (
+              <section className="draft-card panel">
+                <div className="panel-heading">
+                  <div><span className="section-kicker">STAYS ON THE BOARD</span><h2>Customer drafts</h2></div>
+                  <Mail size={17} />
+                </div>
+                {drafts.map((draft) => (
+                  <div className="draft-body" key={draft.id}>
+                    <div className="draft-meta"><span>To {draft.requester}</span><span className="draft-flag">DRAFT · NOT SENT</span></div>
+                    <p>{draft.body}</p>
+                  </div>
+                ))}
+              </section>
+            )}
+
             <section className="specialist-card panel">
               <div className="panel-heading specialist-heading">
-                <div><span className="section-kicker">AFTER THE HUDDLE</span><h2>Specialist contribution</h2></div>
+                <div><span className="section-kicker">AFTER THE HUDDLE</span><h2>Who did what</h2></div>
                 <Users size={17} />
               </div>
-              {agentSummaries.length === 0 ? (
+              {contributions.length === 0 ? (
                 <div className="specialist-empty">
                   <span className="small-icon"><Sparkles size={14} /></span>
-                  <span>Agent contributions will be summarized here after the run.</span>
+                  <span>Each agent's report shows up here once the team runs.</span>
                 </div>
               ) : (
                 <div className="contribution-list">
-                  {agentSummaries.map(({ key, summary, entries }) => {
-                    const agent = AGENTS[key];
-                    return (
-                      <div className="contribution-row" key={key}>
-                        <span className="contribution-avatar" style={{ "--agent-color": agent.color } as CSSProperties}>{agent.initials}</span>
-                        <div><strong>{agent.label}<small>{agent.role}</small></strong><p>{summary}</p></div>
-                        <span className="contribution-count">{entries.length}</span>
+                  {contributions.map(({ key, report, tools, steps }) => (
+                    <div className="contribution-row" key={key}>
+                      <span className="contribution-avatar" style={{ "--agent-color": AGENTS[key].color } as CSSProperties}>{AGENTS[key].initials}</span>
+                      <div>
+                        <strong>{AGENTS[key].label}<small>{AGENTS[key].role}</small></strong>
+                        <p>{report}</p>
+                        {tools.length > 0 && <p className="contribution-tools">{tools.join(" · ")}</p>}
                       </div>
-                    );
-                  })}
+                      <span className="contribution-count">{steps}</span>
+                    </div>
+                  ))}
                 </div>
               )}
               <div className="ticket-outcome">
-                <span className={`outcome-mark ${visibleStatus === "resolved" ? "outcome-done" : ""}`}>{visibleStatus === "resolved" ? <BadgeCheck size={17} /> : <CircleAlert size={16} />}</span>
-                <span><small>TICKET OUTCOME</small><strong>{approvalNotes[selectedTicketId] || (visibleStatus === "resolved" ? "Resolution recorded" : "Awaiting agent run")}</strong></span>
-                <span className={`status-badge status-${visibleStatus}`}><i />{visibleStatus === "resolved" ? "RESOLVED" : "OPEN"}</span>
+                <span className={`outcome-mark ${status === "resolved" ? "outcome-done" : ""}`}>{status === "resolved" ? <BadgeCheck size={17} /> : <CircleAlert size={16} />}</span>
+                <span><small>TICKET OUTCOME</small><strong>{ticket?.latest_note ?? "Not run yet"}</strong></span>
+                <span className={`status-badge ${statusClass(status)}`}><i />{STATUS_LABELS[status] ?? status}</span>
               </div>
             </section>
           </aside>
@@ -748,20 +613,11 @@ function App() {
 
         <footer className="desk-footer">
           <span><span className="footer-mark"><Store size={13} /></span> Campus Customs <i>·</i> Operator console</span>
-          <span><ShieldCheck size={13} /> Drafts stay local <i>·</i> Payments require approval</span>
+          <span><ShieldCheck size={13} /> Drafts stay local <i>·</i> Every payment needs a human</span>
         </footer>
       </main>
     </div>
   );
-}
-
-function fallbackTicketTitle(ticketId: number): string {
-  const titles: Record<number, string> = {
-    101: "Customer order needs a stock check",
-    102: "Store operations needs a specialist review",
-    103: "A customer request is waiting on the desk"
-  };
-  return titles[ticketId] ?? "Ticket details unavailable";
 }
 
 export default App;

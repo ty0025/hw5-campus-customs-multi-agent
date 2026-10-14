@@ -9,15 +9,18 @@
     "preview": "vite preview --host localhost"
   },
   "dependencies": {
-    "react": "latest",
-    "react-dom": "latest",
-    "lucide-react": "latest"
+    "react": "^19.3.0",
+    "react-dom": "^19.3.0",
+    "lucide-react": "^1.53.0"
   },
   "devDependencies": {
-    "@vitejs/plugin-react": "latest",
-    "vite": "latest",
-    "typescript": "latest",
-    "@types/react": "latest",
-    "@types/react-dom": "latest"
+    "@vitejs/plugin-react": "^6.1.2",
+    "vite": "^8.3.4",
+    "typescript": "^7.0.2",
+    "@types/react": "^19.3.0",
+    "@types/react-dom": "^19.3.0"
+  },
+  "engines": {
+    "node": "^20.19.0 || >=22.12.0"
   }
 }

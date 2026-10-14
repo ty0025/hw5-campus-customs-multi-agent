@@ -9,7 +9,7 @@ adding columns to the source database. ``assigned_agent`` is workflow metadata.
 from __future__ import annotations
 
 from datetime import datetime
-from typing import Literal
+from typing import Any, Literal
 
 from pydantic import BaseModel, ConfigDict, Field, field_validator
 
@@ -142,7 +142,12 @@ class TicketRunResponse(BaseModel):
 
 
 class AuditStep(BaseModel):
-    """One append-only, sanitized event from an agent's observable workflow."""
+    """One append-only event: who acted, what they did, and what came back.
+
+    ``message`` is the human-readable line (a delegation task, an agent's
+    summary, an error). Tool steps also keep the exact arguments and a
+    trimmed copy of the MCP result so a reviewer can check every number.
+    """
 
     model_config = ConfigDict(extra="forbid")
 
@@ -150,12 +155,18 @@ class AuditStep(BaseModel):
     run_id: str = Field(min_length=1, max_length=80)
     sequence: int = Field(ge=1)
     ticket_id: int | None = Field(default=None, gt=0)
-    agent_name: AgentName | Literal["System"]
+    agent_name: AgentName | Literal["System", "Human"]
     action: Literal[
         "ticket_run_started", "thinking_started", "delegation", "tool_call_started",
         "tool_call_completed", "response_synthesis", "ticket_run_completed", "error",
+        "approval_decided", "database_reset",
     ]
     delegation_target: AgentName | None = None
     tool_called: str | None = Field(default=None, max_length=100)
-    reasoning_notes: str = Field(default="", max_length=1600)
+    tool_arguments: dict[str, Any] | None = None
+    tool_result: str | None = Field(default=None, max_length=2000)
+    message: str = Field(default="", max_length=4000)
+    findings: list[str] = Field(default_factory=list)
+    model: str | None = None
+    usage: dict[str, int] | None = None
     depth: int = Field(default=0, ge=0, le=6)

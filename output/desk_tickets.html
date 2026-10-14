@@ -57,6 +57,9 @@
     .ticket-grid { display: grid; grid-template-columns: minmax(0, 1.45fr) minmax(260px, .75fr); gap: 16px; align-items: start; }
     .expected-section, .actual-section, .empty-card { border: 1px solid var(--line); border-radius: 16px; background: var(--white); box-shadow: var(--shadow); }
     .expected-section { padding: 22px; }
+    .plan-note { margin: 0 0 12px; color: #66788d; font-size: .82rem; font-style: italic; }
+    .original-plan { margin-top: 14px; color: #66788d; font-size: .85rem; }
+    .original-plan summary { cursor: pointer; font-weight: 600; }
     .actual-section { min-height: 230px; padding: 22px; border-style: dashed; background: #fbfdff; }
     .section-kicker { display: flex; align-items: center; gap: 9px; margin: 0 0 16px; color: var(--navy); font-size: 17px; font-weight: 850; }
     .section-kicker .dot { display: inline-grid; place-items: center; width: 27px; height: 27px; border-radius: 8px; background: var(--sky); color: var(--blue); font-size: 14px; }
@@ -110,27 +113,20 @@
     </nav>
 
     <section class="panel active" id="panel-101" role="tabpanel" aria-labelledby="tab-101" tabindex="0">
-      <div class="ticket-heading"><div><h2>Ticket 101 · Customer order / stock ingestion</h2><p>Check physical availability before promising fulfillment.</p></div><span class="ticket-badge">Expected pathway</span></div>
+      <div class="ticket-heading"><div><h2>Ticket 101 · Customer order: Bulldog tee, size S</h2><p>Check stock, clear the vendor hold, and order the missing tee.</p></div><span class="ticket-badge">Expected pathway</span></div>
       <div class="ticket-grid">
         <div class="expected-section">
           <h3 class="section-kicker"><span class="dot">✓</span> Expected</h3>
-          <div class="field"><div class="field-label">Initial Agent Called</div><p><strong>BossAgent calls InventoryAgent first.</strong></p></div>
-          <div class="field"><div class="field-label">Reasoning</div><p>Ticket 101 asks for one size-S Bulldog tee, but the database records zero on hand and links the ticket to open invoice 501 for its apparel vendor. Inventory must verify the shortfall and shipment blocker before anyone promises fulfillment.</p></div>
-          <div class="field"><div class="field-label">Expected Delegations</div>
-            <ul class="delegations">
-              <li><strong>BossAgent → InventoryAgent:</strong> Check one CC-TEE-WHITE, size S, and follow the ticket's invoice link to identify whether vendor 1 can ship.</li>
-              <li><strong>InventoryAgent → AccountingAgent:</strong> If invoice 501 is still open, request a cash check and an invoice-linked payment proposal; stop until a human approves it.</li>
-              <li><strong>AccountingAgent → BossAgent:</strong> Report the verified invoice amount, available cash, and whether a proposal is staged; do not pay directly.</li>
-              <li><strong>InventoryAgent → CustomerServiceAgent:</strong> Give the verified zero-stock/shortfall result so CS can save an honest backorder draft.</li>
-              <li><strong>CustomerServiceAgent → BossAgent:</strong> Return the local draft for a supported ticket decision; after invoice clearance, Inventory may stage a purchase order for human review but must not claim goods arrived.</li>
-            </ul>
-          </div>
-          <div class="field"><div class="field-label">Specialist Boundary</div><p class="exclusions">FacilitiesAgent is omitted; AccountingAgent is included because Ticket 101 itself links to an unpaid vendor invoice.</p></div>
-          <div class="field"><div class="field-label">Expected MCP Tools</div>
-            <ul class="tool-list"><li>get_ticket_details · tickets, invoices, vendors</li><li>check_inventory_stock · inventory</li><li>check_vendor_restock_eligibility · vendors, invoices, desk</li><li>get_cash_balance · cash_accounts</li><li>propose_payment · approvals, invoices, cash_accounts, tickets</li><li>propose_purchase_order · approvals, tickets, inventory, pricing, vendors, invoices, cash_accounts</li><li>save_customer_draft · tickets, customer_drafts</li><li>update_ticket_status · tickets</li></ul>
-          </div>
+          <p class="plan-note">Revised plan, written on Oct 14 before the final board run (after I added the vendor lookup, discount math and purchase-order approval). My first Problem 6 plan is kept at the bottom.</p>
+          <div class="field"><div class="field-label">Boss calls first</div><p><strong>Inventory</strong></p></div>
+          <div class="field"><div class="field-label">Why</div><p>It is an order for one white tee in size S, so the first question is whether we have one. The data says we have zero, and the ticket is linked to invoice 501 from Bulldog Print Co, our apparel vendor, which is still open.</p></div>
+          <div class="field"><div class="field-label">Expected delegations</div><ul class="delegations"><li><strong>Boss → Inventory:</strong> check CC-TEE-WHITE size S, qty 1. If we are short, find a vendor with find_restock_vendors and check whether it is on hold.</li><li><strong>Inventory → Accounting:</strong> Bulldog Print Co is blocked by invoice 501 ($840, due 8/28, so 3 days overdue on the 8/31 desk date). Stage the invoice payment first, then a purchase order for the 1-tee shortfall ($8) that waits on it.</li><li><strong>Human (me):</strong> approve the $840 payment, then the $8 order, on the board.</li><li><strong>Boss → Customer Service (resume run):</strong> after both approvals, draft a note to Tauhid that the tee is on order and expected around 9/5 (8/31 + 5 lead days).</li><li><strong>Boss:</strong> close the ticket as resolved.</li></ul></div>
+          <div class="field"><div class="field-label">Not called</div><p class="exclusions">Facilities, since nothing here touches the lease.</p></div>
+          <div class="field"><div class="field-label">Expected MCP tools</div><ul class="tool-list"><li>get_ticket_details</li><li>check_inventory_stock</li><li>find_restock_vendors</li><li>check_vendor_restock_eligibility</li><li>get_cash_balance</li><li>propose_payment</li><li>propose_purchase_order</li><li>save_customer_draft</li><li>update_ticket_status</li></ul></div>
+          <div class="field"><div class="field-label">Expected cash effect</div><p>−$840 (invoice 501) and −$8 (one tee), so $3,400 → $2,552.</p></div>
+          <details class="original-plan"><summary>Original Problem 6 plan (commit 4a2d5c1)</summary><p>Boss calls Inventory first because the order can only move once we know if the size is in stock. Boss → Inventory: check stock. Inventory → Customer Service: draft a confirmation, or a backorder notice if short. Customer Service → Boss: return the draft so Boss can close the ticket. Facilities and Accounting left out unless a restock payment comes up. Tools: get_ticket_details, check_inventory_stock, save_customer_draft, update_ticket_status.</p></details>
         </div>
-        <div class="actual-section"><h3 class="section-kicker"><span class="dot">✓</span> Actual</h3><p class="actual-lead"><strong>Ticket 101 · customer_order</strong> Invoice 501 was cleared and the vendor shipment hold is removed; size S remains out of stock, with a backorder draft saved and no shipment claimed.</p><div class="actual-columns"><div><h4>Participating agents</h4><ul><li>Boss</li><li>Inventory</li><li>Accounting</li></ul></div><div><h4>Delegation chain</h4><ul><li>Boss → Inventory</li><li>Inventory → Accounting</li></ul></div><div><h4>Exact MCP tools invoked</h4><ul><li><code>get_ticket_details</code></li><li><code>check_inventory_stock</code></li><li><code>check_vendor_restock_eligibility</code></li><li><code>get_cash_balance</code></li><li><code>propose_payment</code></li><li><code>update_ticket_status</code></li><li><code>save_customer_draft</code></li></ul></div></div><h4>Human approvals recorded</h4><ul><li>Bulldog Print Co: invoice 501 · $840.00 · PAID</li></ul><details><summary>Boss agent-run summary (before human approval)</summary><p>At agent-run close, the $840 invoice proposal still needed approval. Human approval later cleared invoice 501; size S remains out of stock and no purchase order or goods receipt is recorded, so the customer order remains unfulfilled.</p></details></div>
+        <div class="actual-section"><h3 class="section-kicker"><span class="dot">…</span> Actual</h3><p class="actual-lead">Filled in after the final board run.</p></div>
       </div>
     </section>
 
@@ -139,50 +135,38 @@
       <div class="ticket-grid">
         <div class="expected-section">
           <h3 class="section-kicker"><span class="dot">✓</span> Expected</h3>
-          <div class="field"><div class="field-label">Initial Agent Called</div><p><strong>BossAgent calls FacilitiesAgent first.</strong></p></div>
-          <div class="field"><div class="field-label">Reasoning</div><p>Ticket 102 is Elm City Properties' rent notice for lease 1. Facilities should compare the September 2 due date with the shop date, 2026-08-31, before Accounting stages anything.</p></div>
-          <div class="field"><div class="field-label">Expected Delegations</div>
-            <ul class="delegations">
-              <li><strong>BossAgent → FacilitiesAgent:</strong> Read lease 1 and compare its next due date with <code>desk.date_today</code>.</li>
-              <li><strong>FacilitiesAgent → AccountingAgent:</strong> If rent is due, ask Accounting to verify checking cash and stage a lease-linked proposal for human approval.</li>
-              <li><strong>AccountingAgent → BossAgent:</strong> Report the verified $2,400 obligation, available cash, and pending approval; do not execute payment.</li>
-              <li><strong>BossAgent:</strong> Keep the ticket awaiting human approval, then record the paid outcome only after the approval route confirms settlement.</li>
-            </ul>
-          </div>
-          <div class="field"><div class="field-label">Specialist Boundary</div><p class="exclusions">InventoryAgent and CustomerServiceAgent are omitted because this ticket concerns only rent and cash approval.</p></div>
-          <div class="field"><div class="field-label">Expected MCP Tools</div>
-            <ul class="tool-list"><li>get_ticket_details · tickets</li><li>get_lease_due_status · leases, desk</li><li>get_cash_balance · cash_accounts</li><li>propose_payment · approvals, leases, cash_accounts, tickets</li><li>update_ticket_status · tickets</li></ul>
-          </div>
+          <p class="plan-note">Revised plan, written on Oct 14 before the final board run (after I added the vendor lookup, discount math and purchase-order approval). My first Problem 6 plan is kept at the bottom.</p>
+          <div class="field"><div class="field-label">Boss calls first</div><p><strong>Facilities</strong></p></div>
+          <div class="field"><div class="field-label">Why</div><p>It is the landlord's rent notice for lease 1. Facilities owns the lease and can compare the 9/2 due date with the 8/31 desk date before anyone stages money.</p></div>
+          <div class="field"><div class="field-label">Expected delegations</div><ul class="delegations"><li><strong>Boss → Facilities:</strong> read lease 1: $2,400 due 9/2, 2 days out, not paid yet.</li><li><strong>Facilities → Accounting:</strong> check cash and stage the $2,400 rent payment to Elm City Properties (lease:1).</li><li><strong>Human (me):</strong> approve the rent payment on the board.</li><li><strong>Boss (resume run):</strong> see the approval and close the ticket as resolved.</li></ul></div>
+          <div class="field"><div class="field-label">Not called</div><p class="exclusions">Inventory and Customer Service. No product is involved and the landlord is not a customer, so no customer draft.</p></div>
+          <div class="field"><div class="field-label">Expected MCP tools</div><ul class="tool-list"><li>get_ticket_details</li><li>get_lease_due_status</li><li>get_cash_balance</li><li>propose_payment</li><li>update_ticket_status</li></ul></div>
+          <div class="field"><div class="field-label">Expected cash effect</div><p>−$2,400 rent, so $2,552 → $152 if 101 runs first.</p></div>
+          <details class="original-plan"><summary>Original Problem 6 plan (commit 4a2d5c1)</summary><p>I first wrote this plan as a vendor restock problem (Inventory first, then Accounting to clear an unpaid invoice), which belongs to ticket 101, not the rent notice. Planned tools: get_ticket_details, check_inventory_stock, get_vendor_unpaid_invoices, get_cash_balance, propose_payment, update_ticket_status.</p></details>
         </div>
-        <div class="actual-section"><h3 class="section-kicker"><span class="dot">✓</span> Actual</h3><p class="actual-lead"><strong>Ticket 102 · rent_notice</strong> The recorded monthly rent liability was paid through human approval and the lease is marked PAID.</p><div class="actual-columns"><div><h4>Participating agents</h4><ul><li>Boss</li><li>Facilities</li><li>Accounting</li></ul></div><div><h4>Delegation chain</h4><ul><li>Boss → Facilities</li><li>Facilities → Accounting</li></ul></div><div><h4>Exact MCP tools invoked</h4><ul><li><code>get_ticket_details</code></li><li><code>get_lease_due_status</code></li><li><code>get_cash_balance</code></li><li><code>propose_payment</code></li><li><code>update_ticket_status</code></li></ul></div></div><h4>Human approvals recorded</h4><ul><li>Elm City Properties: lease 1 · $2,400.00 · PAID</li></ul><details><summary>Boss agent-run summary (before human approval)</summary><p>At agent-run close, the $2,400 rent proposal still needed approval. Human approval later recorded the payment and marked lease 1 paid; the proposal text reflects the earlier point in the run.</p></details></div>
+        <div class="actual-section"><h3 class="section-kicker"><span class="dot">…</span> Actual</h3><p class="actual-lead">Filled in after the final board run.</p></div>
       </div>
     </section>
 
     <section class="panel" id="panel-103" role="tabpanel" aria-labelledby="tab-103" tabindex="0" hidden>
-      <div class="ticket-heading"><div><h2>Ticket 103 · Bulk hoodie discount request</h2><p>Check stock and margin, then request the missing discount terms.</p></div><span class="ticket-badge">Expected pathway</span></div>
+      <div class="ticket-heading"><div><h2>Ticket 103 · Bulk hoodie discount request</h2><p>Check stock, margin and cash, then make the discount call.</p></div><span class="ticket-badge">Expected pathway</span></div>
       <div class="ticket-grid">
         <div class="expected-section">
           <h3 class="section-kicker"><span class="dot">✓</span> Expected</h3>
-          <div class="field"><div class="field-label">Initial Agent Called</div><p><strong>BossAgent calls InventoryAgent first.</strong></p></div>
-          <div class="field"><div class="field-label">Reasoning</div><p>Ticket 103 requests 20 size-M navy hoodies, but only eight are recorded on hand. The club also has not stated a target price or discount, so stock and margin facts must be established before a counteroffer.</p></div>
-          <div class="field"><div class="field-label">Expected Delegations</div>
-            <ul class="delegations">
-              <li><strong>BossAgent → InventoryAgent:</strong> Check the ticket's SKU, size, and quantity; report the eight available units and twelve-unit shortfall.</li>
-              <li><strong>BossAgent → AccountingAgent:</strong> Check the recorded unit cost and list-price margin; do not approve a discount without an actual target price.</li>
-              <li><strong>BossAgent → CustomerServiceAgent:</strong> Draft a local reply asking the club for its target price or budget and explaining the confirmed stock shortfall.</li>
-              <li><strong>InventoryAgent / AccountingAgent / CustomerServiceAgent → BossAgent:</strong> Return only database-supported findings so Boss can leave the ticket awaiting the customer's missing terms.</li>
-            </ul>
-          </div>
-          <div class="field"><div class="field-label">Specialist Boundary</div><p class="exclusions">FacilitiesAgent is omitted; vendor/payment specialists are not added unless the customer approves a quantity and a verified vendor proposal becomes necessary.</p></div>
-          <div class="field"><div class="field-label">Expected MCP Tools</div>
-            <ul class="tool-list"><li>get_ticket_details · tickets</li><li>check_inventory_stock · inventory</li><li>get_pricing_and_margin · pricing</li><li>save_customer_draft · tickets, customer_drafts</li><li>update_ticket_status · tickets</li></ul>
-          </div>
+          <p class="plan-note">Revised plan, written on Oct 14 before the final board run (after I added the vendor lookup, discount math and purchase-order approval). My first Problem 6 plan is kept at the bottom.</p>
+          <div class="field"><div class="field-label">Boss calls first</div><p><strong>Inventory</strong></p></div>
+          <div class="field"><div class="field-label">Why</div><p>The club wants 20 size-M hoodies at a discount. Before pricing anything we need to know how many we can actually sell: the data shows 8 on hand, so 12 short.</p></div>
+          <div class="field"><div class="field-label">Expected delegations</div><ul class="delegations"><li><strong>Boss → Inventory:</strong> check CC-HOOD-NAVY M, qty 20 (8 on hand, 12 short) and find the restock vendor (Bulldog Print Co, apparel, 5-day lead, clear once invoice 501 is paid).</li><li><strong>Inventory or Boss → Accounting:</strong> show the margin at 0%, 10% and 15% off for 20 units, and try to stage a 12-hoodie order ($264). By this point checking should be $152, so I expect the tool to refuse the order.</li><li><strong>Boss:</strong> make the call: 10% off ($52.20 each, $1,044 for 20) keeps the margin around 58%. Sell the 8 now and restock the other 12 when cash allows.</li><li><strong>Boss → Customer Service:</strong> draft the offer to Yale AI Club with the price and the split delivery.</li><li><strong>Boss:</strong> close as resolved. No approval should be needed because the order is refused.</li></ul></div>
+          <div class="field"><div class="field-label">Not called</div><p class="exclusions">Facilities.</p></div>
+          <div class="field"><div class="field-label">Expected MCP tools</div><ul class="tool-list"><li>get_ticket_details</li><li>check_inventory_stock</li><li>find_restock_vendors</li><li>get_pricing_and_margin</li><li>get_cash_balance</li><li>propose_purchase_order (expected to refuse)</li><li>save_customer_draft</li><li>update_ticket_status</li></ul></div>
+          <div class="field"><div class="field-label">Expected cash effect</div><p>None. The $264 hoodie order should be refused because only $152 is left.</p></div>
+          <details class="original-plan"><summary>Original Problem 6 plan (commit 4a2d5c1)</summary><p>I first wrote this plan as a lease problem (Facilities first, then Accounting to stage rent), which is really ticket 102. It did not plan for the hoodie stock check or the discount at all. Planned tools: get_ticket_details, get_lease_due_status, get_cash_balance, propose_payment, update_ticket_status.</p></details>
         </div>
-        <div class="actual-section"><h3 class="section-kicker"><span class="dot">✓</span> Actual</h3><p class="actual-lead"><strong>Ticket 103 · price_override</strong> The requested bulk discount was reviewed; stock is short by 12 hoodies, so an unsent review draft records that no discount or delivery date is confirmed.</p><div class="actual-columns"><div><h4>Participating agents</h4><ul><li>Boss</li><li>Inventory</li><li>Accounting</li><li>Customer Service</li></ul></div><div><h4>Delegation chain</h4><ul><li>Boss → Inventory</li><li>Boss → Accounting</li><li>Boss → Customer Service</li></ul></div><div><h4>Exact MCP tools invoked</h4><ul><li><code>get_ticket_details</code></li><li><code>check_inventory_stock</code></li><li><code>get_pricing_and_margin</code></li><li><code>save_customer_draft</code></li><li><code>update_ticket_status</code></li></ul></div></div><details><summary>Agent-run recommendation and final database state</summary><p>The agent recommended waiting for the customer. The later resolution handler wrote <code>resolved</code> to the ticket row, but the business request still needs a target price or budget and confirmation of the 12-unit shortfall.</p></details></div>
+        <div class="actual-section"><h3 class="section-kicker"><span class="dot">…</span> Actual</h3><p class="actual-lead">Filled in after the final board run.</p></div>
       </div>
     </section>
 
-    <section class="panel" id="panel-cash" role="tabpanel" aria-labelledby="tab-cash" tabindex="0" hidden><div class="cash-ledger"><p class="mapping-alert"><strong>Database mapping note:</strong> Invoice 501 belongs to Ticket 101; lease 1 belongs to Ticket 102; Ticket 103 is a hoodie discount request. The invoice 501 and lease 1 cash movements are attributed to the tickets that actually reference them in the database.</p><table><thead><tr><th>Item</th><th>Reference</th><th>Cash change (USD)</th></tr></thead><tbody><tr><th>Starting Checking Balance</th><td>Post-reset balance</td><td class="amount">3,400.00</td></tr><tr><th>Ticket 101 impact</th><td>Invoice 501 · Bulldog Print Co</td><td class='amount'>-840.00</td></tr><tr><th>Ticket 102 impact</th><td>Lease 1 · Elm City Properties</td><td class='amount'>-2,400.00</td></tr><tr><th>Ticket 103 impact</th><td>Hoodie discount review · no disbursement</td><td class='amount'>+0.00</td></tr><tr class="ending"><th>Ending Checking Balance</th><td>Verified against cash_accounts</td><td class="amount">160.00</td></tr></tbody></table></div></section>
+    <section class="panel" id="panel-cash" role="tabpanel" aria-labelledby="tab-cash" tabindex="0" hidden><div class="empty-card"><div><h2>Cash</h2><p><em>Filled in after the final board run.</em></p></div></div></section>
 
     <section class="panel" id="panel-reflection" role="tabpanel" aria-labelledby="tab-reflection" tabindex="0" hidden>
       <div class="empty-card"><div><div class="empty-icon" aria-hidden="true">✦</div><h2>Reflection</h2><p><em>Coming later in subsequent problems</em></p></div></div>

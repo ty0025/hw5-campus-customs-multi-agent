@@ -9,7 +9,7 @@ import sqlite3
 import sys
 from collections.abc import Iterator
 from contextlib import contextmanager
-from datetime import date, datetime, timezone
+from datetime import date, datetime, timedelta, timezone
 from pathlib import Path
 from typing import Annotated, Literal
 
@@ -72,6 +72,15 @@ class VendorRestockResult(BaseModel):
     blocked_by_unpaid_invoices: bool
 
 
+class RecordedPayment(BaseModel):
+    """One completed row from the payments ledger."""
+
+    payment_id: int
+    amount: float
+    paid_at: str
+    approved_by: str | None
+
+
 class LeaseDueResult(BaseModel):
     """The next recorded rent obligation, without executing a payment."""
 
@@ -84,6 +93,42 @@ class LeaseDueResult(BaseModel):
     days_until_due: int
     status: Literal["overdue", "due_today", "upcoming"]
     notes: str | None
+    payments_recorded: list[RecordedPayment] = Field(default_factory=list)
+
+
+class VendorOption(BaseModel):
+    """One vendors row with its invoice hold and the arrival date if ordered today."""
+
+    vendor_id: int
+    vendor_name: str
+    specialty: str
+    lead_days: int
+    unpaid_invoice_ids: list[int]
+    unpaid_total: float
+    blocked_by_unpaid_invoices: bool
+    pending_invoice_payment_approvals: list[int]
+    arrival_if_ordered_today: date
+
+
+class RestockVendorsResult(BaseModel):
+    """All recorded vendors for one product; the agent chooses by specialty."""
+
+    sku: str
+    product_name: str
+    shop_date: date
+    vendors: list[VendorOption]
+
+
+class TicketApproval(BaseModel):
+    """A human-review request already staged for this ticket."""
+
+    approval_id: int
+    kind: str
+    amount: float
+    status: str
+    payee: str | None
+    detail: str | None
+    decision_note: str | None = None
 
 
 class TicketDetailsResult(BaseModel):
@@ -104,6 +149,8 @@ class TicketDetailsResult(BaseModel):
     status: str
     created_at: str
     shop_date: date
+    approvals: list[TicketApproval] = Field(default_factory=list)
+    drafts_saved: int = 0
 
 
 class TicketStatusResult(BaseModel):
@@ -155,6 +202,7 @@ class PurchaseOrderProposalResult(BaseModel):
     reason: str
     status: Literal["PENDING_APPROVAL"]
     cash_changed: Literal[False]
+    waits_for_invoice_payments: list[int] = Field(default_factory=list)
 
 
 class CustomerDraftResult(BaseModel):
@@ -170,13 +218,21 @@ class CustomerDraftResult(BaseModel):
 
 
 class PricingAndMarginResult(BaseModel):
-    """Recorded SKU unit cost, list price, gross margin, and markup rate."""
+    """Recorded SKU cost and price, plus the margin at a quantity and discount."""
 
     sku: str
     unit_cost: float
     list_price: float
     gross_margin_per_unit: float
     gross_margin_percent: float
+    quantity: int
+    discount_percent: float
+    unit_price_after_discount: float
+    margin_per_unit_after_discount: float
+    margin_percent_after_discount: float
+    order_revenue: float
+    order_cost: float
+    order_gross_profit: float
 
 
 mcp = FastMCP(
@@ -252,6 +308,13 @@ def _identifier(value: str, label: str) -> str:
     if not isinstance(value, str) or not value.strip():
         raise ValueError(f"{label} must be a nonempty string.")
     return value.strip().upper()
+
+
+def _table_exists(conn: sqlite3.Connection, table: str) -> bool:
+    """App tables (approvals, customer_drafts) only exist after their first write."""
+    return conn.execute(
+        "SELECT 1 FROM sqlite_master WHERE type = 'table' AND name = ?", (table,)
+    ).fetchone() is not None
 
 
 def _shop_date(conn: sqlite3.Connection) -> date:
@@ -386,8 +449,10 @@ def get_lease_due_status(lease_id: PositiveInt) -> LeaseDueResult:
         values overdue, due_today, or upcoming.
 
     Uses the database's business date, never the machine's current date.
-    This reads the next recorded liability without claiming payment was made,
-    scheduling a transfer, or updating the lease; payments need human approval.
+    payments_recorded lists completed rent payments for this lease from the
+    payments ledger. When a human approves a rent payment, the approval route
+    moves next_due forward one month, so a paid month is not offered again.
+    This tool never pays rent or changes the lease.
     Raises ValueError for invalid IDs, unknown leases, or invalid desk data.
     """
     _positive_integer(lease_id, "lease_id")
@@ -399,6 +464,10 @@ def get_lease_due_status(lease_id: PositiveInt) -> LeaseDueResult:
         if lease is None:
             raise ValueError(f"No lease record for lease_id={lease_id}.")
         today = _shop_date(conn)
+        paid_rows = conn.execute(
+            "SELECT id, amount, paid_at, approved_by FROM payments WHERE kind = 'lease' AND ref_id = ? ORDER BY id",
+            (lease_id,),
+        ).fetchall()
     due = date.fromisoformat(lease["next_due"])
     days_until_due = (due - today).days
     status = "overdue" if days_until_due < 0 else "due_today" if days_until_due == 0 else "upcoming"
@@ -412,7 +481,65 @@ def get_lease_due_status(lease_id: PositiveInt) -> LeaseDueResult:
         days_until_due=days_until_due,
         status=status,
         notes=lease["notes"],
+        payments_recorded=[
+            RecordedPayment(payment_id=row["id"], amount=row["amount"], paid_at=row["paid_at"],
+                            approved_by=row["approved_by"])
+            for row in paid_rows
+        ],
     )
+
+
+@mcp.tool(annotations=READ_ONLY)
+def find_restock_vendors(sku: NonemptyString) -> RestockVendorsResult:
+    """List every recorded vendor with its lead time and unpaid-invoice hold for a restock.
+
+    Args:
+        sku: Product SKU that is short, such as the SKU on a customer or bulk order ticket.
+
+    Returns:
+        RestockVendorsResult with the product name from inventory, the desk date,
+        and every vendors row: specialty, lead_days, unpaid invoice IDs and total,
+        whether those invoices block new shipments, which of them already have a
+        pending payment approval, and arrival_if_ordered_today = desk date + lead_days.
+
+    The database has no SKU-to-vendor table, so this tool does not pick a vendor.
+    The agent chooses by specialty (for example an apparel vendor for a hoodie)
+    and says so. A vendor with any open unpaid invoice will not ship new product.
+    Raises ValueError when the SKU has no inventory record.
+    """
+    sku = _identifier(sku, "sku")
+    with _connection() as conn:
+        product = conn.execute("SELECT name FROM inventory WHERE sku = ? LIMIT 1", (sku,)).fetchone()
+        if product is None:
+            raise ValueError(f"No inventory record for SKU {sku!r}.")
+        today = _shop_date(conn)
+        vendors = conn.execute("SELECT id, name, specialty, lead_days FROM vendors ORDER BY id").fetchall()
+        has_approvals = _table_exists(conn, "approvals")
+        options = []
+        for vendor in vendors:
+            unpaid = conn.execute(
+                "SELECT id, amount FROM invoices WHERE vendor_id = ? "
+                "AND lower(trim(status)) IN ('open','unpaid','overdue','pending') ORDER BY id",
+                (vendor["id"],),
+            ).fetchall()
+            pending: list[int] = []
+            if has_approvals and unpaid:
+                pending = [row["ref_id"] for row in conn.execute(
+                    "SELECT ref_id FROM approvals WHERE kind = 'payment' AND ref_type = 'invoice' "
+                    "AND status = 'pending' ORDER BY ref_id"
+                ).fetchall() if row["ref_id"] in {invoice["id"] for invoice in unpaid}]
+            options.append(VendorOption(
+                vendor_id=vendor["id"],
+                vendor_name=vendor["name"],
+                specialty=vendor["specialty"],
+                lead_days=vendor["lead_days"],
+                unpaid_invoice_ids=[row["id"] for row in unpaid],
+                unpaid_total=round(sum(float(row["amount"]) for row in unpaid), 2),
+                blocked_by_unpaid_invoices=bool(unpaid),
+                pending_invoice_payment_approvals=pending,
+                arrival_if_ordered_today=today + timedelta(days=int(vendor["lead_days"])),
+            ))
+    return RestockVendorsResult(sku=sku, product_name=product["name"], shop_date=today, vendors=options)
 
 
 @mcp.tool(annotations=READ_ONLY)
@@ -428,25 +555,49 @@ def get_ticket_details(ticket_id: PositiveInt) -> TicketDetailsResult:
     date_today read from desk. If invoice_id is present, invoice_vendor_id and
     invoice_vendor_name resolve that actual invoices-to-vendors relationship.
 
+    approvals lists the payment and purchase-order requests already staged for
+    this ticket with their human decision (pending, approved), and drafts_saved
+    counts local customer drafts. Boss uses both to tell a first run from a
+    follow-up run after a human has approved something.
+
     The source table has no separate customer_id or description columns; these
     returned names keep a clear agent-facing schema without modifying SQLite.
     Raises ValueError when the ticket is absent or desk.date_today is invalid.
     """
     if isinstance(ticket_id, bool) or not isinstance(ticket_id, int) or ticket_id <= 0:
         raise ValueError("ticket_id must be a positive integer.")
+    approvals: list[TicketApproval] = []
+    drafts_saved = 0
     with _connection() as conn:
         row = conn.execute("SELECT * FROM tickets WHERE id = ?", (ticket_id,)).fetchone()
         if row is None:
             raise ValueError(f"Ticket {ticket_id} does not exist.")
         today = _shop_date(conn)
-    invoice_vendor = None
-    if row["invoice_id"] is not None:
-        with _connection() as conn:
+        invoice_vendor = None
+        if row["invoice_id"] is not None:
             invoice_vendor = conn.execute(
                 "SELECT i.vendor_id, v.name AS vendor_name FROM invoices i "
                 "JOIN vendors v ON v.id = i.vendor_id WHERE i.id = ?",
                 (row["invoice_id"],),
             ).fetchone()
+        if _table_exists(conn, "approvals"):
+            for item in conn.execute(
+                "SELECT id, kind, amount, status, payload_json, decision_note FROM approvals WHERE ticket_id = ? ORDER BY id",
+                (ticket_id,),
+            ).fetchall():
+                payload = json.loads(item["payload_json"] or "{}")
+                detail = (f"{payload.get('qty')} x {payload.get('sku')} {payload.get('size')}"
+                          if item["kind"] == "purchase_order"
+                          else f"{payload.get('ref_type')} {payload.get('ref_id')}")
+                approvals.append(TicketApproval(
+                    approval_id=item["id"], kind=item["kind"], amount=item["amount"], status=item["status"],
+                    payee=payload.get("payee") or payload.get("vendor_name"), detail=detail,
+                    decision_note=item["decision_note"],
+                ))
+        if _table_exists(conn, "customer_drafts"):
+            drafts_saved = conn.execute(
+                "SELECT COUNT(*) FROM customer_drafts WHERE ticket_id = ?", (ticket_id,)
+            ).fetchone()[0]
     return TicketDetailsResult(
         ticket_id=row["id"], customer_id=row["requester"], type=row["type"], subject=row["subject"],
         description=row["notes"], sku=row["sku"], size=row["size"], quantity=row["qty"],
@@ -455,6 +606,7 @@ def get_ticket_details(ticket_id: PositiveInt) -> TicketDetailsResult:
         invoice_vendor_name=invoice_vendor["vendor_name"] if invoice_vendor else None,
         status=row["status"],
         created_at=row["created_at"], shop_date=today,
+        approvals=approvals, drafts_saved=drafts_saved,
     )
 
 
@@ -547,14 +699,18 @@ def _ensure_approval_table(conn: sqlite3.Connection) -> None:
 
 
 def _ensure_purchase_order_table(conn: sqlite3.Connection) -> None:
-    """Create the app-owned record for an approved staff handoff, never a sent order."""
-    conn.execute(
-        "CREATE TABLE IF NOT EXISTS purchase_orders ("
-        "id INTEGER PRIMARY KEY AUTOINCREMENT, approval_id INTEGER NOT NULL UNIQUE, "
-        "ticket_id INTEGER NOT NULL, vendor_id INTEGER NOT NULL, sku TEXT NOT NULL, "
-        "size TEXT NOT NULL, qty INTEGER NOT NULL, unit_cost REAL NOT NULL, total REAL NOT NULL, "
-        "lead_days INTEGER NOT NULL, status TEXT NOT NULL, created_at TEXT NOT NULL, approved_by TEXT)"
-    )
+    """Create the app-owned record of human-approved restock orders (never sent to a vendor)."""
+    conn.execute(PURCHASE_ORDERS_DDL)
+
+
+PURCHASE_ORDERS_DDL = (
+    "CREATE TABLE IF NOT EXISTS purchase_orders ("
+    "id INTEGER PRIMARY KEY AUTOINCREMENT, approval_id INTEGER NOT NULL UNIQUE, "
+    "ticket_id INTEGER NOT NULL, vendor_id INTEGER NOT NULL, sku TEXT NOT NULL, "
+    "size TEXT NOT NULL, qty INTEGER NOT NULL, unit_cost REAL NOT NULL, total REAL NOT NULL, "
+    "lead_days INTEGER NOT NULL, expected_arrival TEXT, status TEXT NOT NULL, "
+    "created_at TEXT NOT NULL, approved_by TEXT)"
+)
 
 
 @mcp.tool(annotations=WRITE_LOCAL)
@@ -650,9 +806,10 @@ def propose_payment(
             raise ValueError("The reference is not linked to a ticket and cannot be staged for board review.")
         ticket_id = int(ticket["id"])
         _ensure_approval_table(conn)
+        # Cash already promised to other pending requests (payments and purchase orders) is reserved.
         pending = conn.execute(
-            "SELECT COALESCE(SUM(amount), 0) FROM approvals WHERE kind = 'payment' AND status = 'pending' "
-            "AND NOT (ref_type = ? AND ref_id = ?)",
+            "SELECT COALESCE(SUM(amount), 0) FROM approvals WHERE status = 'pending' "
+            "AND NOT (kind = 'payment' AND ref_type = ? AND ref_id = ?)",
             (reference_type, reference_number),
         ).fetchone()[0]
         available_for_new = round(balance - float(pending or 0), 2)
@@ -697,18 +854,27 @@ def propose_purchase_order(
     vendor_id: PositiveInt,
     reason: Annotated[str, Field(min_length=1, max_length=800)],
 ) -> PurchaseOrderProposalResult:
-    """Stage a stock-shortfall purchase order for human approval and staff handoff.
+    """Stage a stock-shortfall purchase order (unit_cost x quantity) for human approval.
 
-    The request must match the ticket's SKU/size and exact uncovered quantity,
-    use a recorded vendor candidate with a compatible apparel specialty, and
-    pass the vendor's open-invoice shipping block. The MCP tool never emails a
-    supplier, decrements stock, debits cash, or marks goods shipped. Approval
-    creates a local ``purchase_orders`` handoff; payment remains a separate,
-    human-approved cash operation.
+    Args:
+        ticket_id: The product ticket that is short (customer_order or price_override).
+        sku, size: Must match the ticket's SKU and size.
+        quantity: Must equal the current shortfall (ticket qty minus on-hand stock).
+        vendor_id: An apparel vendor from find_restock_vendors; for a ticket with a
+            linked invoice it must be that invoice's vendor.
+        reason: Short business reason shown to the human approver.
+
+    Cash check: the order cost must fit in checking cash minus every other pending
+    request; otherwise the tool refuses and nothing is staged.
+    Vendor hold: if the vendor has an open unpaid invoice, the order can only be
+    staged when each blocking invoice already has a pending payment request, and
+    the approval route will not approve the order until that invoice is paid.
+    This tool never contacts the vendor, changes stock, or moves cash. When a
+    human approves it, the approval route debits checking and records the order.
 
     Returns:
-        PurchaseOrderProposalResult with the recorded candidate, exact shortfall,
-        estimated commitment, and ``PENDING_APPROVAL`` state.
+        PurchaseOrderProposalResult with the vendor, exact shortfall, total cost,
+        lead time, ``PENDING_APPROVAL`` state, and any invoices it waits for.
     """
     sku = _identifier(sku, "sku")
     size = _identifier(size, "size")
@@ -742,12 +908,11 @@ def propose_purchase_order(
 
         _ensure_approval_table(conn)
         _ensure_purchase_order_table(conn)
-        completed_handoff = conn.execute(
-            "SELECT id FROM purchase_orders WHERE ticket_id = ? AND status = 'approved_for_staff' LIMIT 1",
-            (ticket_id,),
+        completed_order = conn.execute(
+            "SELECT id FROM purchase_orders WHERE ticket_id = ? LIMIT 1", (ticket_id,)
         ).fetchone()
-        if completed_handoff is not None:
-            raise ValueError(f"Ticket {ticket_id} already has an approved purchase order for staff handoff.")
+        if completed_order is not None:
+            raise ValueError(f"Ticket {ticket_id} already has an approved purchase order.")
 
         vendor = conn.execute(
             "SELECT id, name, specialty, lead_days FROM vendors WHERE id = ?", (vendor_id,)
@@ -768,14 +933,19 @@ def propose_purchase_order(
         unpaid = conn.execute(
             "SELECT id, amount, status FROM invoices WHERE vendor_id = ?", (vendor_id,)
         ).fetchall()
-        blockers = [row for row in unpaid if str(row["status"] or "").strip().casefold()
+        blockers = [int(row["id"]) for row in unpaid if str(row["status"] or "").strip().casefold()
                     in {"open", "unpaid", "overdue", "pending"}]
         if blockers:
-            identifiers = ", ".join(str(row["id"]) for row in blockers)
-            raise ValueError(
-                f"Vendor {vendor['name']} cannot ship while invoice(s) {identifiers} remain unpaid; "
-                "Accounting must clear them through human approval first."
-            )
+            staged = {int(row["ref_id"]) for row in conn.execute(
+                "SELECT ref_id FROM approvals WHERE kind = 'payment' AND ref_type = 'invoice' AND status = 'pending'"
+            ).fetchall()}
+            missing = [invoice_id for invoice_id in blockers if invoice_id not in staged]
+            if missing:
+                raise ValueError(
+                    f"Vendor {vendor['name']} will not ship while invoice(s) "
+                    f"{', '.join(map(str, missing))} are unpaid. Stage the invoice payment with "
+                    "propose_payment first; the order can then wait on that approval."
+                )
 
         price = conn.execute("SELECT unit_cost FROM pricing WHERE sku = ?", (sku,)).fetchone()
         if price is None:
@@ -818,6 +988,7 @@ def propose_purchase_order(
                 "lead_days": int(vendor["lead_days"]),
                 "reason": reason,
                 "requested_by": "Accounting",
+                "waits_for_invoice_payments": blockers,
             }
             cursor = conn.execute(
                 "INSERT INTO approvals(ticket_id,kind,ref_type,ref_id,amount,payload_json,status,created_at) "
@@ -841,6 +1012,7 @@ def propose_purchase_order(
         reason=reason,
         status="PENDING_APPROVAL",
         cash_changed=False,
+        waits_for_invoice_payments=blockers,
     )
 
 
@@ -889,31 +1061,51 @@ def save_customer_draft(
 
 
 @mcp.tool(annotations=READ_ONLY)
-def get_pricing_and_margin(sku: NonemptyString) -> PricingAndMarginResult:
-    """Read one product's cost, list price, and unit gross margin from pricing.
+def get_pricing_and_margin(
+    sku: NonemptyString,
+    quantity: PositiveInt = 1,
+    discount_percent: Annotated[float, Field(ge=0, le=90)] = 0,
+) -> PricingAndMarginResult:
+    """Read a product's cost and list price and work out the margin at a quantity and discount.
 
     Args:
         sku: Product SKU, normalized by trimming whitespace and uppercasing.
+        quantity: Units in the order (default 1).
+        discount_percent: Percent off list price to test, 0 to 90 (default 0).
 
     Returns:
-        PricingAndMarginResult with recorded unit_cost, list_price,
-        gross_margin_per_unit = list_price - unit_cost, and the margin as a
-        percentage of list price. This does not apply an unrequested discount.
+        PricingAndMarginResult with recorded unit_cost and list_price, the list
+        margin, and for the tested discount: unit price, margin per unit, margin
+        percent of the discounted price, and order revenue, cost and gross profit.
+        It only calculates; it does not approve or record a discount.
 
-    Raises ValueError when the SKU has no recorded pricing or the list price
-    cannot be used as a margin denominator.
+    Raises ValueError when the SKU has no recorded pricing or a positive list price.
     """
     sku = _identifier(sku, "sku")
+    _positive_integer(quantity, "quantity")
     with _connection() as conn:
         row = conn.execute("SELECT sku, unit_cost, list_price FROM pricing WHERE sku = ?", (sku,)).fetchone()
     if row is None:
         raise ValueError(f"No pricing record for SKU {sku!r}.")
-    if float(row["list_price"]) <= 0:
+    list_price = float(row["list_price"])
+    unit_cost = float(row["unit_cost"])
+    if list_price <= 0:
         raise ValueError("Recorded list_price must be positive to calculate a margin percentage.")
-    margin = float(row["list_price"]) - float(row["unit_cost"])
-    return PricingAndMarginResult(sku=row["sku"], unit_cost=row["unit_cost"], list_price=row["list_price"],
-                                  gross_margin_per_unit=round(margin, 2),
-                                  gross_margin_percent=round(margin / float(row["list_price"]) * 100, 2))
+    margin = list_price - unit_cost
+    unit_price = round(list_price * (1 - float(discount_percent) / 100), 2)
+    unit_margin = unit_price - unit_cost
+    return PricingAndMarginResult(
+        sku=row["sku"], unit_cost=unit_cost, list_price=list_price,
+        gross_margin_per_unit=round(margin, 2),
+        gross_margin_percent=round(margin / list_price * 100, 2),
+        quantity=quantity, discount_percent=float(discount_percent),
+        unit_price_after_discount=unit_price,
+        margin_per_unit_after_discount=round(unit_margin, 2),
+        margin_percent_after_discount=round(unit_margin / unit_price * 100, 2) if unit_price > 0 else 0.0,
+        order_revenue=round(unit_price * quantity, 2),
+        order_cost=round(unit_cost * quantity, 2),
+        order_gross_profit=round(unit_margin * quantity, 2),
+    )
 
 
 if __name__ == "__main__":
