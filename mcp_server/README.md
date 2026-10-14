@@ -1,132 +1,83 @@
 # Campus Customs MCP Server
 
-This module gives Boss, Inventory, Accounting, Facilities, and Customer Service ten shared, typed FastMCP tools for reading shop facts and staging the limited local board actions needed for a decision.
-It uses `FastMCP` from `mcp.server.fastmcp` and exports the registered server object as `mcp_server.server.mcp`.
-Problem 3 defined the tools, and Problem 4 adds a local stdio entry point for MCP clients; importing the module still starts no transport.
-No HTTP endpoint or network listener is configured.
+`mcp_server/server.py` is a FastMCP server (`mcp.server.fastmcp.FastMCP`, exported as `mcp_server.server.mcp`). It is the only way the five agents reach shop data. Every fact an agent uses about stock, vendors, invoices, rent, cash or prices comes from one of its 11 tools.
 
-## Database and boundaries
+## Database
 
-- The only tool database is `data/campus_customs_new.db`, resolved from the Homework 5 project root using the module's location, independently of the current working directory.
-- The path has no environment override or fallback to another database, and a missing working copy produces an error instead of creating a blank file.
-- Read tools open SQLite with `mode=ro` and `PRAGMA query_only = ON`; the four explicitly scoped board/proposal writes use bound SQL parameters and an atomic transaction against the same fixed working file.
-- Business-date comparisons use the single `desk.date_today` value; an absent or invalid value produces an error instead of using the computer's date.
-- These tools never execute payments, place orders, reserve stock, reset the database, send messages, or make AI calls. They may update ticket status/notes, stage a pending approval, and save a local customer draft.
-- Subsequent agent AI calls must use only `gpt-6-luna` through Portkey; this MCP module does not load API credentials.
+- The server only opens `data/campus_customs_new.db`. The path is fixed relative to the package (`PROJECT_ROOT / "data" / "campus_customs_new.db"`), so it doesn't depend on the current folder, and no environment variable can point it at another file.
+- If the working copy is missing, tools raise an error. The server never creates a blank database. See the main README for how to copy `data/campus_customs.db` over it.
+- Read tools open SQLite read-only (`mode=ro` plus `PRAGMA query_only = ON`). The four write tools use bound parameters inside one `BEGIN IMMEDIATE` transaction each.
+- "Today" is always `desk.date_today` (2026-08-31 in this database), never the computer's clock.
 
-## Ticket numbering correction
+## How it is started
 
-The open tickets follow their actual database records: Ticket 101 is the customer T-shirt order, Ticket 102 is the rent notice, and Ticket 103 is the bulk hoodie discount.
-Tool-to-ticket mappings use the recorded ticket fields and obligation references; no cash event is attributed without a matching database link.
-The vendor tool supports Ticket 101 through its linked invoice and Ticket 103 when evaluating a candidate supplier; the lease tool supports Ticket 102.
-The hoodie request still needs a proposed discount and a margin decision in later problems; these three tools provide the requested facts without claiming to resolve the entire ticket.
+- **From `.mcp.json`** (Claude Code or another MCP client opened in the repo root):
+  ```json
+  {"mcpServers": {"campus_customs_mcp": {"command": "py", "args": ["-m", "mcp_server.server"], "env": {"PYTHONPATH": "."}}}}
+  ```
+  `py` is the Windows Python launcher. I used it because on my PC plain `python` points at the Microsoft Store stub. On macOS/Linux, change it to `python3`. `PYTHONPATH` is `.`, so the client has to start it from the repo root.
+- **By the backend.** For each ticket run, `backend/agent_team.py` starts `python -m mcp_server.server` as a stdio subprocess with the backend's own Python, opens a `ClientSession`, and checks that all 11 tools are there before any agent starts. The subprocess gets a minimal environment with no `PORTKEY_API_KEY`.
+- **By hand**, for testing: `py -m mcp_server.server` (Windows) or `python3 -m mcp_server.server`. It talks over stdin/stdout, opens no port, and prints nothing while it waits for a client.
 
-## Tool contracts
+When run with `-m`, `server.py` re-launches itself with `.venv`'s Python if that folder exists, so the launcher's own Python doesn't need the packages. Without a `.venv`, install `mcp_server/requirements.txt` (`mcp==1.30.0`, `pydantic`) into whatever Python starts it.
 
-All ten tools include typed input and return contracts; read tools are annotated read-only, while the four local board writes are explicitly annotated as non-destructive local operations without external interactions.
-Python return values are Pydantic models; MCP serializes them to structured JSON, with dates represented as ISO `YYYY-MM-DD` strings.
-Positive integer inputs reject zero, negatives, booleans, fractions, and numeric strings.
-Invalid input or a missing requested record raises `ValueError` in direct Python calls and is surfaced as an MCP tool error through FastMCP.
+## The three Problem 3 tools
 
-### `check_inventory_stock(sku: str, size: str, order_quantity: int) -> InventoryStockResult`
+These were the first three tools. The examples are what they return on a freshly reset database.
 
-Compares the inventory row for a SKU and size with the requested order quantity; this checks Ticket 101's T-shirt availability and Ticket 103's bulk hoodie shortfall.
-
-| Parameter | Type | Meaning |
+| Tool | Tables | Ticket and why |
 | --- | --- | --- |
-| `sku` | nonempty string | Exact product SKU after trimming and uppercasing. |
-| `size` | nonempty string | Exact size after trimming and uppercasing. |
-| `order_quantity` | positive integer | Number of units requested. |
+| `check_inventory_stock(sku, size, order_quantity)` | `inventory` | Ticket 101: `CC-TEE-WHITE` size S has 0 on hand for an order of 1. Ticket 103: `CC-HOOD-NAVY` size M has 8 of the 20 requested, so 12 short. Without it nobody knows whether the order can ship. |
+| `check_vendor_restock_eligibility(vendor_id)` | `vendors`, `invoices`, `desk` | Ticket 101: Bulldog Print Co (vendor 1, apparel reprint, 5-day lead) has invoice 501 for $840, due 2026-08-28 and 3 days overdue, so it won't ship until that is paid. |
+| `get_lease_due_status(lease_id)` | `leases`, `payments`, `desk` | Ticket 102: lease 1 (Chapel Street shop, Elm City Properties) owes $2,400 on 2026-09-02, 2 days after the desk date, with no payment recorded. |
 
-Returns `sku`, `size`, `product_name`, and `location` as strings; `order_quantity`, `on_hand`, and `shortfall` as integers; and `can_fulfill` as a boolean.
-`shortfall` is the uncovered quantity, never below zero, while an unknown SKU/size produces an error rather than fabricated zero stock.
-This reads `inventory` without allocating or decrementing stock.
+After the final run these answers change: invoice 501 is paid and the lease's next due date is 2026-10-02.
 
-### `check_vendor_restock_eligibility(vendor_id: int) -> VendorRestockResult`
+## All 11 tools
 
-Checks `vendors` and its related `invoices`, using `desk.date_today` for overdue information, to establish whether unpaid invoices block that vendor's new shipments.
-
-| Parameter | Type | Meaning |
+| Tool | Tables | What it does |
 | --- | --- | --- |
-| `vendor_id` | positive integer | An existing `vendors.id`, obtained from an invoice or a selected candidate. |
+| `get_ticket_details(ticket_id)` | `tickets`, `desk`, `invoices`, `vendors`, `approvals`, `customer_drafts` | Reads the ticket, the desk date, the vendor behind a linked invoice, any approvals already staged with their status, and how many drafts exist. Boss uses the approvals list to tell a first run from a follow-up run. |
+| `check_inventory_stock(sku, size, order_quantity)` | `inventory` | On-hand quantity, shortfall and location for one SKU and size. An unknown SKU is an error, not zero stock. |
+| `find_restock_vendors(sku)` | `inventory`, `desk`, `vendors`, `invoices`, `approvals` | Lists every vendor with specialty, lead days, open invoices, whether those block shipping, which already have a pending payment, and the arrival date if ordered today. The database has no SKU-to-vendor table, so the agent picks by specialty. |
+| `check_vendor_restock_eligibility(vendor_id)` | `vendors`, `invoices`, `desk` | One vendor's open invoices with days overdue, and whether they block new shipments. |
+| `get_lease_due_status(lease_id)` | `leases`, `payments`, `desk` | Rent amount, next due date, days until due (`overdue`, `due_today` or `upcoming`) and any rent payments already recorded. |
+| `get_cash_balance(account_name="Operating Cash")` | `cash_accounts` | The checking balance. The default label maps to the database's single `checking` row. |
+| `get_pricing_and_margin(sku, quantity=1, discount_percent=0)` | `pricing` | Cost, list price and margin, plus the discounted unit price, margin percent and order revenue, cost and gross profit for a quantity and discount. It only calculates. |
+| `propose_payment(amount, recipient, reason, ref_id)` | writes `approvals`; reads `desk`, `cash_accounts`, `invoices` or `leases`, `tickets` | Stages a pending payment for `invoice:<id>` or `lease:<id>`. The amount must match the invoice or the monthly rent, and it refuses if the amount is more than checking minus other pending requests. It never touches `payments` or the balance. |
+| `propose_purchase_order(ticket_id, sku, size, quantity, vendor_id, reason)` | writes `approvals`; reads `tickets`, `inventory`, `vendors`, `invoices`, `pricing`, `cash_accounts`, `purchase_orders` | Stages a pending restock order at unit cost. Quantity must equal the ticket's shortfall, the vendor must be an apparel vendor (and the invoice's vendor if the ticket links one), and every open invoice at that vendor must already have a pending payment. It refuses if the cost is more than checking minus pending requests. |
+| `save_customer_draft(ticket_id, draft_body)` | reads `tickets`; writes `customer_drafts` | Saves a draft addressed to the ticket's requester, with `sent=false`. Nothing is sent. |
+| `update_ticket_status(ticket_id, status, resolution)` | `tickets` | Sets the status (`open`, `in_progress`, `waiting_approval`, `waiting_customer`, `blocked`, `ready_for_staff`, `resolved`) and appends a `Resolution:` line to the ticket notes. |
 
-Returns `vendor_id` and `lead_days` as integers; `vendor_name` and `specialty` as strings; `shop_date` as a date; `total_unpaid` as a number; `blocked_by_unpaid_invoices` as a boolean; and `unpaid_invoices` as a list of `UnpaidInvoice` objects.
-Each invoice contains `invoice_id: int`, `amount: float`, `due_date: date`, `status: str`, `description: str | None`, `overdue: bool`, and `days_overdue: int`.
-An empty invoice list and zero total mean the existing vendor has no blocking invoices; an unknown vendor instead produces an error.
+## Which tools write
 
-Status handling is explicit: `open`, `unpaid`, `overdue`, and `pending` block shipment even before their due date; `paid`, `settled`, `closed`, `void`, `cancelled`, and `canceled` do not block; any other status produces an error requiring clarification.
-The supplied initial database uses `open`.
-Vendor specialty and lead time are database facts, but invoice clearance does not establish that the vendor supplies a particular SKU or guarantee arrival timing.
+Four tools write, and all four stay inside the working database:
 
-### `get_lease_due_status(lease_id: int) -> LeaseDueResult`
+- `update_ticket_status`: ticket status and notes
+- `propose_payment`: one pending row in `approvals`
+- `propose_purchase_order`: one pending row in `approvals`
+- `save_customer_draft`: one row in `customer_drafts`
 
-Reads `leases` and `desk` to classify Ticket 102's next recorded rent obligation using the shop's business date.
+No tool moves cash, marks an invoice paid, changes a lease, places an order or sends a message. `approvals`, `customer_drafts` and `purchase_orders` don't exist in the original database. The tools create them the first time they're needed. Money only moves in the backend route `POST /api/approvals/{approval_id}/approve`, after a person clicks Approve on the board. That route writes `payments`, `purchase_orders`, `invoices`, `leases` and `cash_accounts`, and refuses any amount larger than checking.
 
-| Parameter | Type | Meaning |
-| --- | --- | --- |
-| `lease_id` | positive integer | An existing `leases.id`, normally taken from the rent ticket. |
+The server itself doesn't check who is calling. The rule that only Accounting may call `propose_payment` and `propose_purchase_order` is enforced in `backend/agent_team.py`, which also caps each ticket at 40 MCP calls.
 
-Returns `lease_id: int`, `space_name: str`, `landlord: str`, `monthly_rent: float`, `next_due: date`, `shop_date: date`, `days_until_due: int`, `notes: str | None`, and `status: Literal["overdue", "due_today", "upcoming"]`.
-`days_until_due = next_due - shop_date`: a negative value means overdue, zero means due today, and a positive value means upcoming.
-This describes the next recorded liability and does not approve, execute, or assert a payment.
+## Tests
 
-## Local dependency and verification commands
+From the repo root:
 
-Use Python 3.10 or later and install the dependencies from the Homework 5 root:
-
-```powershell
-python -m pip install -r mcp_server/requirements.txt
+```bash
+PYTHONPATH=. python -m unittest tests.test_mcp_server
 ```
 
-An isolated environment is available at `hw5/.venv`; run the acceptance checks from `hw5` with:
+The tests check the tool list and parameters, bad inputs, the SQL-injection-style SKU case, the read-only connection, and that neither database file changes. Several read the working copy and expect the reset state, so `test_ticket_102_lease_is_due_in_two_shop_days` fails after a full run (the lease is then due 2026-10-02).
 
-```powershell
-.\.venv\Scripts\python.exe -B -m unittest discover -s tests -p test_mcp_server.py -v
+## Running the backend
+
+The agents reach this server through the backend. From the repo root:
+
+```bash
+cd backend && uvicorn main:app --reload --port 8000
 ```
 
-The suite checks the submitted working copy and uses an isolated copy of the pristine database when it needs the original unpaid-invoice state. It verifies tool schemas and error handling, hashes both submitted databases before and after, and does not invent shop records or start a transport.
-
-## MCP client registration (Problem 4)
-
-The Homework 5 root contains `.mcp.json` with the requested `campus_customs_mcp` registration, command `python`, arguments `["-m", "mcp_server.server"]`, and `PYTHONPATH` set to `.`.
-Open or configure the MCP client with `hw5` as its project/working directory because the supplied `PYTHONPATH` is relative to that root.
-A client supporting `.mcp.json` can then start the module over stdio; the MCP client owns the server process lifetime.
-Creating this file does not establish that a particular editor has already imported or enabled the registration.
-
-When executed as a module, the server first uses `hw5/.venv` if available so plain `python` can find the tested project dependencies without a global package installation.
-If there is no project virtual environment, the invoking Python must have `mcp_server/requirements.txt` installed.
-The stdio entry point does not print non-protocol text to stdout, load credentials, or make AI requests.
-
-Run the real MCP protocol verification from `hw5`:
-
-```powershell
-.\.venv\Scripts\python.exe -B tests/verify_mcp_stdio.py
-```
-
-This loads the exact `.mcp.json` registration, starts its command in a child process, initializes an MCP session, discovers all ten tools, and verifies returned JSON against independent read-only SQL queries.
-It checks rejected inputs, verifies both database hashes, closes the child session, and writes `output/mcp_tool_test_results.json` plus the live-query snapshot `output/mcp_smoke.json`.
-
-## Problem 5 extension: complete tool registry
-
-The initial three tool descriptions above remain applicable. The complete server now exposes ten tools; this registry supersedes the earlier statements that the server is read-only or registers only three tools. All tools reach only `data/campus_customs_new.db`, resolved from the Homework 5 project root.
-
-| Tool and parameters | Return type | SQLite tables accessed | Effect |
-| --- | --- | --- | --- |
-| `check_inventory_stock(sku: str, size: str, order_quantity: int)` | `InventoryStockResult` | `inventory` | Read only; returns product/location, on-hand quantity, shortfall, and fulfillment flag. |
-| `check_vendor_restock_eligibility(vendor_id: int)` | `VendorRestockResult` | `vendors`, `invoices`, `desk` | Read only; returns vendor specialty/lead time and unpaid invoice blockers dated against `desk.date_today`. |
-| `get_lease_due_status(lease_id: int)` | `LeaseDueResult` | `leases`, `desk` | Read only; returns the next rent liability and due classification against the shop date. |
-| `get_ticket_details(ticket_id: int)` | `TicketDetailsResult` | `tickets`, `desk`; when `invoice_id` is present, also `invoices`, `vendors` | Read only; maps stored requester/notes into agent-facing fields, includes the shop date, and returns the vendor linked to the ticket's actual invoice reference. |
-| `update_ticket_status(ticket_id: int, status: str, resolution: str)` | `TicketStatusResult` | `tickets` | Writes only the ticket status and appends a resolution note to `tickets.notes`; it never changes payment records. |
-| `get_cash_balance(account_name: str = "Operating Cash")` | `CashBalanceResult` | `cash_accounts` | Read only; returns the recorded account name, balance, and account date. |
-| `propose_payment(amount: float, recipient: str, reason: str, ref_id: str | None)` | `PaymentProposalResult` | `cash_accounts`; for a reference, `invoices` or `leases`, `tickets`, and `approvals` | Checks available cash and obligation identity, then stages a referenced request in `approvals` with database state `pending` and returned state `PENDING_APPROVAL`; it never inserts into `payments`. Without `ref_id`, it returns an unstaged proposal payload. |
-| `propose_purchase_order(ticket_id, sku, size, quantity, vendor_id, reason)` | `PurchaseOrderProposalResult` | `tickets`, `inventory`, `vendors`, `invoices`, `pricing`, `approvals`, `purchase_orders` | Rechecks the exact shortfall, vendor specialty, ticket-linked supplier where present, unpaid-invoice block, and unit cost; writes only a pending approval and never sends an order or debits cash. |
-| `save_customer_draft(ticket_id: int, draft_body: str)` | `CustomerDraftResult` | `tickets`, `customer_drafts` | Reads recipient/subject and saves a local draft with `sent=false`; no outbound service is called. |
-| `get_pricing_and_margin(sku: str)` | `PricingAndMarginResult` | `pricing` | Read only; returns recorded cost/list price and calculated unit gross margin. |
-
-All tool inputs are typed and validated. The four local writes are `update_ticket_status`, `propose_payment`, `propose_purchase_order`, and `save_customer_draft`; read operations use SQLite query-only mode. Payment proposals stay in `approvals` until human approval. A purchase-order approval creates an internal staff handoff record only: no vendor is contacted, no stock is booked as received, and cash is unchanged until a separate payment is approved.
-
-The five PydanticAI agents are implemented in `backend/agent_team.py` and use an MCP stdio subprocess for all shop facts. The local server process receives no Portkey credential. Only the API process reads `PORTKEY_API_KEY` from the configured environment and makes agent requests through the Portkey gateway.
-
-## Local agent API
-
-From the Homework 5 root, install `backend/requirements.txt` and start `uvicorn backend.agent_api:app --reload`. The `POST /api/tickets/{ticket_id}/run` route runs the Boss-led workflow, opens the local MCP stdio server, and returns a `TicketRunResponse`. The agent route does not send customer or vendor communications and does not execute payments.
+`POST /api/tickets/{ticket_id}/run` starts this server as a subprocess, runs the team, and closes it again when the run ends.

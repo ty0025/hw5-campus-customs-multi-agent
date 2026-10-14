@@ -1,24 +1,28 @@
 # Campus Customs Multi-Agent Operations
 
-Campus Customs is a local operations desk for a campus apparel shop. A FastAPI service runs a five-agent PydanticAI team, the agents use a local FastMCP server for shop data, and a React dashboard lets an operator review tickets, watch the audit feed, and approve proposed payments.
+Campus Customs is a small campus apparel shop. This app is its operations desk, built for Yale MGT 409 Homework 5. It has three parts:
 
-The desk is a simulation. Customer communications are saved as local drafts; the system does not email customers or contact vendors. Agents can stage payments, but only a human approval through the backend can move cash.
+- a FastMCP server (`mcp_server/server.py`) with 11 tools over the shop database `data/campus_customs_new.db`
+- a FastAPI backend (`backend/main.py`) that runs a five-agent PydanticAI team (Boss, Inventory, Accounting, Facilities, Customer Service). Every agent uses `gpt-6-luna` through Portkey, and any agent can hand work to any other.
+- a React + Vite + TypeScript board (`frontend/`) where you watch the agents work a ticket and approve any money they want to spend
 
-## Requirements
+Only Accounting can stage a payment or purchase order, and staging moves no money. Cash moves only when a person clicks Approve on the board, and the approve route refuses anything checking can't cover. Customer messages are saved as drafts. Nothing is emailed or sent to a vendor.
 
-- Python 3.11 or newer
-- Node.js 20 or newer with npm
-- A Portkey API key for agent runs
+## What you need
 
-## Set up the environment
+- Python 3.12 or newer
+- Node.js `^20.19` or `>=22.12`, with npm
+- A Portkey API key (only needed to run the agents; the tests and the MCP server don't use it)
 
-Run these commands from the repository root:
+## Setup
+
+From the repo root:
 
 ```bash
 python -m venv .venv
 ```
 
-Activate the virtual environment:
+Activate it:
 
 ```powershell
 # Windows PowerShell
@@ -30,91 +34,141 @@ Activate the virtual environment:
 source .venv/bin/activate
 ```
 
-Install the Python dependencies and prepare the frontend:
+Install the Python packages:
 
 ```bash
 pip install -r requirements.txt
-cd frontend
-npm install
-cd ..
 ```
 
-Copy `.env.example` to `.env` in the repository root, then replace the placeholder with your own `PORTKEY_API_KEY`. Never commit `.env`; `.gitignore` excludes it. All agent calls use `gpt-6-luna` through Portkey's OpenAI-compatible gateway at `https://api.portkey.ai/v1`.
+Copy `.env.example` to `.env` and set `PORTKEY_API_KEY` to your key (`Copy-Item .env.example .env` on Windows, `cp .env.example .env` elsewhere). `backend/app/settings.py` reads `.env` from the repo root first and then from the folder one level up, so a shared `.env` there also works. `.env` is git-ignored. The model name (`gpt-6-luna`) and the gateway (`https://api.portkey.ai/v1`) are fixed in `settings.py`.
+
+## Clean working copy
+
+`data/campus_customs.db` is the original and is never changed. Everything reads and writes `data/campus_customs_new.db`. Before a full run, put a fresh copy in place:
 
 ```powershell
 # Windows PowerShell
-Copy-Item .env.example .env
+Copy-Item data\campus_customs.db data\campus_customs_new.db -Force
 ```
 
 ```bash
 # macOS / Linux
-cp .env.example .env
+cp data/campus_customs.db data/campus_customs_new.db
 ```
 
-## Database and resets
+Or, with the backend running, click **Reset desk** on the board (or `POST http://localhost:8000/api/database/reset`). I use the button: besides copying the file, it writes a `database_reset` record to `output/audit_trail.json`. The board's live stream and `scripts/export_run_evidence.py` only look at events after the last reset record, so a manual file copy leaves the previous run's events on screen.
 
-`data/campus_customs.db` is the pristine source used for resets. Runtime tools read and update `data/campus_customs_new.db`; keep the original unchanged. Both database files are included in this submission and explicitly allowed by `.gitignore`.
+## Start the MCP server (on its own)
 
-Before a full run of Tickets 101, 102, and 103, reset the working database from the original. From the repository root, run:
+You don't need this for the board. The backend starts the MCP server itself as a stdio subprocess for each ticket run, and Claude Code starts it from `.mcp.json` when the project is opened in this folder. To start it by hand from the repo root:
+
+```powershell
+# Windows (the "py" launcher, as in .mcp.json)
+py -m mcp_server.server
+```
 
 ```bash
-python -c "import shutil; shutil.copyfile('data/campus_customs.db', 'data/campus_customs_new.db')"
+# macOS / Linux
+python3 -m mcp_server.server
 ```
 
-Resetting matters because approvals, payments, lease status, and ticket status persist in the working database between runs. Do not start a fresh three-ticket batch from a previously modified working copy.
+It is a stdio server, so it opens no port and prints nothing. It just waits for an MCP client. Stop it with Ctrl+C. When started this way it re-launches itself with `.venv`'s Python if that folder exists. On macOS/Linux, change `"command": "py"` in `.mcp.json` to `"python3"`. More detail is in `mcp_server/README.md`.
 
-## Start the desk
+## Start the backend
 
-Run the services from separate terminals, with the virtual environment active.
-
-### FastMCP server
-
-From the repository root:
+In a terminal with the venv active:
 
 ```bash
-python -m mcp_server.server
+cd backend && uvicorn main:app --reload --port 8000
 ```
 
-This is a local stdio MCP server, not a network listener. The FastAPI agent runner also starts its own MCP subprocess for each agent session; for ordinary dashboard use, starting the backend is sufficient. Run the command above separately when you want to inspect or test the MCP server directly with a compatible MCP client.
+The API is at `http://localhost:8000` and only allows the board's origin (`http://localhost:5173`) through CORS.
 
-### FastAPI backend
+| Route | What it does |
+| --- | --- |
+| `GET /api/tickets` | Tickets 101-103 with status and how many approvals are pending |
+| `POST /api/tickets/{ticket_id}/run` | Runs the agent team on one ticket |
+| `GET /api/events` | Audit events for the board (`?ticket_id=`, `since_reset=true` by default) |
+| `GET /api/approvals` | Payment and purchase-order requests and their decisions |
+| `POST /api/approvals/{approval_id}/approve` | Body `{"approved_by": "..."}`. The only route that moves cash |
+| `GET /api/drafts` | Customer drafts (never sent) |
+| `GET /api/cash/balance` | Checking balance and the desk date |
+| `POST /api/database/reset` | Copies the original database over the working copy and logs the reset |
 
-From the repository root:
+## Start the board
 
-```bash
-cd backend
-uvicorn main:app --reload --port 8000
-```
-
-The API listens at `http://localhost:8000`.
-
-### React dashboard
-
-In another terminal, from the repository root:
+In a second terminal:
 
 ```bash
 cd frontend
+npm install
 npm run dev
 ```
 
-Open `http://localhost:5173` in a browser.
+Open `http://localhost:5173`. Adding `?ticket=102` to the URL opens a specific ticket.
 
-## Run the three tickets
+## A full three-ticket run
 
-Reset the working database first, start the backend and dashboard, then dispatch tickets one at a time from the desk:
+1. Click **Reset desk**. Checking starts at $3,400.00.
+2. Select CC-101 (T-shirt order) and click **Dispatch agents**. Accounting stages payment #1 ($840 to Bulldog Print Co for overdue invoice 501) and purchase order #2 ($8 for one size S tee). The ticket shows NEEDS APPROVAL.
+3. Type your name in "Approving as". Approve the $840 payment first, then the $8 order. The order card warns that it waits on invoice 501, and the backend refuses it until that invoice is paid.
+4. Click **Resume team to close**. Customer Service saves a draft to the customer and Boss resolves the ticket.
+5. Select CC-102 (rent), click **Dispatch agents**, approve the $2,400 lease payment, then click **Resume team to close**.
+6. Select CC-103 (bulk hoodie discount) and click **Dispatch agents**. The team prices the order and saves a draft offer. No money moves.
 
-1. **Ticket 101 — customer T-shirt order:** the team checks stock and any linked supplier liability, then records a local customer draft or the next fulfillment state.
-2. **Ticket 102 — lease rent:** Facilities checks the lease against `desk.date_today`; Accounting can stage rent for human review.
-3. **Ticket 103 — hoodie discount request:** the team checks stock and the price/cost margin, then drafts a response or asks the customer for missing discount terms.
+Checking should end at $152.00 ($3,400 - $840 - $8 - $2,400). The agents' wording changes from run to run. On ticket 103, if Accounting tries to stage the 12-hoodie restock ($264), `propose_purchase_order` refuses it because only $152 is left.
 
-These identities follow the database records. Review the linked stock, invoice, lease, and pricing data before promising fulfillment or a discount.
+## Tests
 
-## Human payment approval
+From the repo root (no AI calls, no server needed):
 
-Agents do not execute payments. Accounting stages a proposal marked `PENDING_APPROVAL`; the operator reviews the payee, amount, purpose, and balance impact in the dashboard. Approval is submitted to `POST /api/payments/approve`. The backend checks available cash first and rejects any payment that would make the balance negative. If approved, it deducts the amount from `cash_accounts`, records the payment, and marks the referenced invoice or lease liability as paid. This is how an unpaid supplier invoice or rent obligation is cleared; a staged proposal alone does not change the cash balance or settle the liability.
+```bash
+# macOS / Linux
+PYTHONPATH=. python -m unittest discover tests
+```
 
-An inventory shortfall may also produce a separate pending purchase-order approval. Review it through the dashboard or `GET /api/approvals`, then approve it with `POST /api/purchase-orders/approve`. Approval rechecks the supplier's unpaid invoices, recorded stock shortfall, price, and available cash commitments, then records an internal staff handoff. It does not contact the vendor, record goods as received, or immediately debit cash; any later supplier payment still requires its own approval through `/api/payments/approve`.
+```powershell
+# Windows PowerShell
+$env:PYTHONPATH = "."; python -m unittest discover tests
+```
 
-After a clean three-ticket run, build the frontend with `cd frontend && npm run build`, then capture its resolved-state dashboard with `python scripts/render_board_screenshots.py`. This one-shot renderer reads the working database and audit trail, uses a synchronous headless browser, and starts no API or Vite server.
+`tests/test_approval_flow.py` walks the money path for all three tickets on a temporary copy of the original database, including the refusal when checking is too low. `tests/test_mcp_server.py` checks the tools and makes sure neither database file changes. A few MCP tests read the working copy and expect the reset state. On a freshly reset copy all 17 tests pass. On the working copy as submitted (after the final run), `test_ticket_102_lease_is_due_in_two_shop_days` fails, because approving the rent moved the lease's next due date to 2026-10-02. Resetting clears the final-run data, so run that check on a spare clone if you want to keep it.
 
-All customer messages stay as local drafts, and there are no outbound email or vendor integrations.
+## Helper scripts
+
+- `python scripts/export_run_evidence.py` rebuilds `output/resolved_tickets.json` from the audit trail (everything after the last reset) and the working database. It only reads.
+- `python scripts/capture_board.py` saves `output/ticket_101.png` to `ticket_103.png` from the live board using headless Edge or Chrome. The backend and `npm run dev` must be running.
+- `study_database.py` is the Problem 2 script. It resets the working copy and rewrites `output/harness.md` from scratch, so don't run it on the finished repo.
+
+## Project layout
+
+```
+.mcp.json                  MCP registration (campus_customs_mcp)
+mcp_server/server.py       FastMCP server, 11 tools
+backend/main.py            FastAPI routes, approvals, reset
+backend/agent_team.py      the five agents, their limits, the MCP client
+backend/prompts/           one prompt file per agent
+backend/models.py          AgentResult and the other shared models
+backend/audit.py           writes output/audit_trail.json
+backend/app/settings.py    .env loading, Portkey gateway, model name
+frontend/src/App.tsx       the board
+frontend/src/style.css     board styles
+data/campus_customs.db     original database (reset source)
+data/campus_customs_new.db working copy
+tests/                     unit tests
+scripts/                   helper scripts
+AI_prompts.md              prompts I used, problem by problem
+```
+
+## Outputs
+
+All in `output/`:
+
+- `harness.md`: tables, MCP tools, agents, routes, board and safety notes
+- `design.md`: how the board is laid out and why
+- `desk_tickets.html`: tabs for tickets 101, 102 and 103 (Expected and Actual), a Cash tab and a Reflection tab
+- `resolved_tickets.json`: the final run, built by `export_run_evidence.py`
+- `resolved_board.html`: a screenshot of the board for each resolved ticket (`ticket_101.png` to `ticket_103.png`)
+- `audit_trail.json`: every agent step, tool call (arguments and result), approval and reset, as one append-only JSON array. The final run is everything after the last `database_reset` record.
+- `mcp_smoke.json`: the Problem 4 check from Claude Code through `.mcp.json` (one call each to the three Problem 3 tools). It was taken after the final run, so it shows invoice 501 paid and the rent next due 2026-10-02.
+- `github_url.txt`: the repo link

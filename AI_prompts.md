@@ -1,122 +1,277 @@
 # Homework 5: Campus Customs Multi-Agent Operations - AI Prompts Log
 
+I built Problems 1-11 with Codex in VS Code on Oct 8-9. Just after midnight on Oct 14 I had Codex check everything against the full assignment, which added a purchase-order approval and the board screenshots. Later on Oct 14 I used Claude Code to work out why the results looked wrong, rebuild the agent run, and do one clean final run on the board.
+
+Notes on this log:
+
+- Quotes are what I actually sent, copied from my saved Codex and Claude Code sessions. Chinese quotes have an English translation underneath.
+- For most problems my Codex message was a short line plus a longer English brief that I had paraphrased from the problem page. I quote the start of each brief and describe the rest instead of pasting it all. I also pasted assignment text as context a few times (the background section on Oct 8, the full assignment to Codex and to Claude Code on Oct 14), and I say so where it happened.
+- When I gave Codex the full assignment on Oct 14 I told it the briefs were my paraphrases: "这是所有题目，需要你仔细阅读一下然后再理解一下为什么你有些地方和要求做的不一样，只需要阅读并理解，因为我给你的prompt都是我paraphrase过的" (Here are all the questions. Read them carefully and figure out why some of your work differs from the requirements. Just read and understand, because the prompts I gave you were all my paraphrases.)
+- Earlier versions of this file (commits 4a2d5c1 and f92bd94) mostly showed polished English prompts that I never typed. This version was rebuilt on Oct 14 from the saved sessions and replaces them.
+- Dates are local time (UTC+8).
+
 ## Problem 1: Vibe coder prompts
 
-### Initial Prompt
-"Set up a clean Homework 5 workspace and a prompt log that records how each solution changed after review."
+### Prompt I typed (Codex, Oct 8)
+> 我会有很多个问题一个个发给你，你先别急着做
+>
+> 我们来完成Question1：
 
-### Follow-up Prompt
-"Give every problem its own section with a custom first prompt, a refining follow-up, and one clear note about the first attempt's gap."
+Translation: I'm going to send you a lot of questions one at a time, so don't start yet. / Let's do Question 1.
 
-### What was lacking after the first prompt
-The first draft was only a generic outline and did not enforce the three required prompt fields for every problem.
+After that line I pasted a brief asking Codex to create `AI_prompts.md` with one section per problem (first prompt, follow-up, one sentence on what was missing) and a ready-made Problem 1 entry.
+
+### Follow-up (Codex, Oct 9, after Problem 11)
+> Run a comprehensive grading audit across all 11 problems of Homework 5 and perform a complete English translation and human-tone polish of `AI_prompts.md`.
+
+### What was missing after the first try
+The log held tidy template prompts instead of what I typed, and my follow-up made it worse because Codex "translated" my Chinese prompts into English prompts I never sent.
 
 ## Problem 2: Study the Campus Customs database
 
-### Initial Prompt
-"Preserve the supplied database, create a working copy, inspect every table, and map the three open tickets to their stock and business records."
+### Prompt I typed (Codex, Oct 8)
+> 这次我们的作业要在hw5的文件夹里做，帮我先解压data
 
-### Follow-up Prompt
-"Use SQLite PRAGMA output for exact field names and types, then trace each ticket's SKU, invoice, lease, vendor, pricing, and business-date context."
+Translation: This homework goes in the hw5 folder. Unzip the data for me first.
 
-### What was lacking after the first prompt
-The first inspection listed the tables but did not fully connect the ticket rows to their related liabilities and inventory records.
+> Implement Problem 2 ("Study the Campus Customs database") for Homework 5.
+>
+> Execute the following steps programmatically:
+
+The rest of the brief said to copy `campus_customs.db` to `campus_customs_new.db`, read every table with `PRAGMA table_info`, look at the three open tickets, and write `output/harness.md` with each table's fields and types plus one sentence on why the agents need it.
+
+### Follow-up (Codex, Oct 8, in a new session after the first one kept hitting errors)
+> 这次我们的作业要在hw5的文件夹里做，已经解压了，然后我会让你协助我检查一下背景材料和第一第二题，没问题之后我们继续往下做
+
+Translation: This homework is in the hw5 folder and it's already unzipped. I want you to help me check the background material and questions 1 and 2, and once those are fine we'll keep going.
+
+I then pasted the assignment's background section and my Question 1 brief again.
+
+### What was missing after the first try
+The first `harness.md` matched the database, but there was no script to re-run the check, and it didn't say that the hoodie vendor is only a guess from `vendors.specialty`, since no table links a SKU to a vendor.
 
 ## Problem 3: Build the MCP server
 
-### Initial Prompt
-"Build a local FastMCP module with focused stock, vendor-invoice, and lease checks against the working database, using typed signatures and useful tool descriptions."
+### Prompt I typed (Codex, Oct 8)
+> 接下来我们来做Q3：
+>
+> Implement Problem 3 ("Build the MCP server") for Homework 5.
+>
+> Follow these exact architectural requirements:
 
-### Follow-up Prompt
-"Verify each tool against the real database relationships, use desk.date_today for lease timing, and document the actual ticket-number mismatch."
+Translation of the first line: Next, let's do Q3.
 
-### What was lacking after the first prompt
-The initial tool plan identified the ticket-number conflict but had not yet explained how the tools should follow the database's real links.
+The brief asked for a FastMCP server in `mcp_server/` on `data/campus_customs_new.db` with three tools, and it labeled the vendor-invoice tool "for Ticket 102 - Vendor Restock & Invoice Clearance".
+
+### Follow-up (Codex, Oct 8)
+I had first sent the same brief in my first Codex session, where it failed:
+
+> 为啥会报错
+>
+> 你能继续工作吗
+
+Translation: Why is it throwing an error? / Can you keep working?
+
+In the new session Codex asked how to label the tools, because in the database 102 is the rent notice and 103 is the hoodie discount. I picked the option it marked as recommended:
+
+> 按数据库真实关联标注，并注明题面编号冲突（推荐）
+
+Translation: Label them by the real links in the database and note the numbering conflict in the question (recommended).
+
+### What was missing after the first try
+My brief tied the vendor-invoice tool to ticket 102, but in the database 102 is rent and unpaid invoice 501 belongs to ticket 101, so the "conflict" came from my own paraphrase, not from the assignment.
 
 ## Problem 4: Add the MCP server to vibe coder and test each tool
 
-### Initial Prompt
-"Register the local FastMCP module in the project configuration and verify its read-only tools over stdio against the working database."
+### Prompt I typed (Codex, Oct 8)
+> Implement Problem 4 ("Add the MCP server to vibe coder and test each tool") for Homework 5.
+>
+> Execute the following steps programmatically and verify all outputs against the database:
 
-### Follow-up Prompt
-"Make the command resolve from the project root, compare tool responses with independent SQL results, and record that the databases stayed unchanged."
+Then the `.mcp.json` to create (`campus_customs_mcp`, command `python`, args `-m mcp_server.server`, `PYTHONPATH=.`).
 
-### What was lacking after the first prompt
-The first setup did not include a repeatable stdio check that compared live tool responses with the database.
+### Follow-up (Claude Code, Oct 14)
+None with Codex. On Oct 14 Claude Code asked whether to connect the MCP server from Claude Code or Codex. My answer (part of a longer reply quoted in Problem 9):
+
+> 3. P4 用 Claude Code 还是 Codex 接 MCP？，如你所说用claude code也不影响那就用claude
+
+Translation: 3. Connect the MCP server from Claude Code or Codex for P4? Like you said, using Claude Code doesn't change anything, so use Claude.
+
+When it explained the steps for me to do by hand:
+
+> 这个我要干啥没看懂，你能直接新开一个对话帮我做了吗
+
+Translation: I don't get what I'm supposed to do here. Can you just open a new conversation and do it for me?
+
+### What was missing after the first try
+The server had no stdio entry point and the default `python` had no `mcp` package, so Codex made `server.py` relaunch itself inside `.venv`; on Oct 14 `python` on my PC turned out to be the Microsoft Store stub, so `.mcp.json` now uses the `py` launcher.
 
 ## Problem 5: Build the agent team and grow the MCP tools
 
-### Initial Prompt
-"Build the five-role operations team around the local MCP boundary, route every agent through Portkey with gpt-6-luna, and keep decisions auditable and approval-gated."
+### Prompt I typed (Codex, Oct 8)
+> Implement Problem 5 ("Build the agent team and grow the MCP tools", 15 points) for Homework 5.
+>
+> Construct the complete PydanticAI multi-agent operations team, expand the MCP server tools, wire the execution audit logger, and update all required documentation according to the exact specifications below:
 
-### Follow-up Prompt
-"Finish the role prompts, bounded cross-agent delegation, complete tool registry, and append-only audit handling without replacing the existing model or server work."
+The brief then covered the Portkey setup with gpt-6-luna, the Pydantic models, the five agents, delegation and the audit log.
 
-### What was lacking after the first prompt
-The first implementation had schemas and tools but still needed the five agent prompts, connected delegation, and durable execution logging.
+### Follow-up (Codex, Oct 8, after the first run was cut off)
+> 针对Q5：
+>
+> Resume and complete the remaining deliverables for Problem 5 ("Build the agent team and grow the MCP tools") after the previous execution interruption.
+>
+> Do not wipe or discard the existing edits in `hw5/backend/models.py` and `hw5/mcp_server/server.py`. Inspect and validate them first, then proceed with the pending tasks below:
+
+Translation of the first line: About Q5.
+
+Claude Code, Oct 14, before it changed anything:
+
+> 在你开始修改之前，我需要你协助我回答这个问题。这次模型是不是只能用gpt6 luna，所以如果你用claude code的话会被扣分。还是说你能够规避掉这个问题
+
+Translation: Before you start changing things, help me answer this. Is gpt6 luna the only model allowed this time, so I'd lose points if you use Claude Code? Or is there a way around that?
+
+Its answer was that the rule is about the model the agents call, which stays gpt-6-luna through Portkey, so using Claude Code as the vibe coder was fine. The diagnosis (Problem 9) then found that the agent prompts hard-coded what each ticket was, the audit trail kept no tool arguments or results, and the pricing tool couldn't take a quantity or a discount, so the team and tools were rebuilt.
+
+### What was missing after the first try
+The first pass stopped after `models.py` and the MCP tools, with no agent prompts, no delegation between agents and no audit logger.
 
 ## Problem 6: Plan the three tickets
 
-### Initial Prompt
-"Create an offline desk page with separate ticket, cash, and reflection tabs, and lay out the expected specialist handoffs and tool calls for each ticket."
+### Prompt I typed (Codex, Oct 8)
+> Implement Problem 6 ("Plan the three tickets", 8 points) for Homework 5.
+>
+> Construct a standalone, interactive HTML dashboard at `output/desk_tickets.html` and document the expected operational pathways for open tickets 101, 102, and 103 before backend wiring.
 
-### Follow-up Prompt
-"Keep each path limited to relevant specialists, make the tabs keyboard accessible, and call out any ticket-number mismatch before backend execution."
+The brief then gave a plan for each ticket, using the same wrong ticket labels as my Q3 brief.
 
-### What was lacking after the first prompt
-The initial plan followed the assignment's ticket labels before reconciling them with the actual database records.
+### Follow-up (Codex, Oct 8, after I went back to finish Q5)
+> 完成Q6
+
+Translation: Finish Q6.
+
+### What was missing after the first try
+The Expected plan followed my brief, so it put a vendor-restock plan under ticket 102 and a lease plan under 103; it was rewritten before the final run on Oct 14, and the original is kept in a collapsed block on each tab.
 
 ## Problem 7: Backend routes
 
-### Initial Prompt
-"Connect the dashboard to the ticket board, agent runner, event feed, cash balance, payment approval, and database reset through FastAPI routes."
+### Prompt I typed (Codex, Oct 8)
+> Implement Problem 7 ("Backend routes", 7 points) for Homework 5.
+>
+> Build the FastAPI backend in `backend/main.py` to bridge the React dashboard, the multi-agent system, and the database.
 
-### Follow-up Prompt
-"Make approvals transactional, reject payments that would overdraw cash, preserve audit history, and support the requested Uvicorn command from backend/."
+The brief listed six routes: tickets, run, events, payment approval, cash balance and reset.
 
-### What was lacking after the first prompt
-The first route pass still needed a transactional cash-floor check and reliable project-path handling.
+### Follow-up
+None at the time. The later changes came from the Oct 14 check and rebuild in Problem 9.
+
+### What was missing after the first try
+The only approve route handled payments, so purchase orders had no approval path and drafts had no route; Codex added `GET /api/approvals` and a purchase-order route on Oct 14, and the rebuild merged both into `POST /api/approvals/{approval_id}/approve` and added `GET /api/drafts`.
 
 ## Problem 8: Agent dashboard
 
-### Initial Prompt
-"Build a clear React, Vite, and TypeScript operations desk that shows tickets, live agent activity, cash, payment proposals, and outcomes."
+### Prompt I typed (Codex, Oct 8)
+> Implement Problem 8 ("Agent dashboard", 12 points) for Homework 5.
+>
+> Build a polished, highly usable React + Vite + TypeScript dashboard in `frontend/` that connects to the FastAPI backend at `http://localhost:8000`.
 
-### Follow-up Prompt
-"Give the five agents distinct visual identities, poll live events during runs, and make approval and resolution feedback immediate and easy to read."
+### Follow-up
+None at the time. The purchase-order card came from the Oct 14 Codex check, and the rest from the Claude Code rebuild (Problem 9).
 
-### What was lacking after the first prompt
-The first dashboard direction did not yet explain how live traces, agent identity, and approval feedback fit into one operator workflow.
+### What was missing after the first try
+The board had no live agent text, no drafts card and no way to resume a ticket after approval, and it was never used for the Oct 9 run because my Q9 brief ran everything from a script.
 
 ## Problem 9: Resolve the tickets
 
-### Initial Prompt
-"Run the three tickets sequentially in a foreground-only workflow, reconcile approved payments, and publish the resolved-ticket artifacts and cash ledger."
+### Prompt I typed (Codex, Oct 9)
+> Implement Problem 9 ("Resolve the tickets", 10 points) for Homework 5.
+>
+> CRITICAL ENVIRONMENT INSTRUCTION:
+> Do NOT launch background or persistent server processes (such as `npm run dev` or `uvicorn main:app --reload`) in the terminal. Execute all resolution steps, multi-agent calls, and validations synchronously via a standalone, single-run Python automation script (e.g., `scripts/resolve_all.py`).
 
-### Follow-up Prompt
-"Use the database's real invoice and lease links, reset before the batch, preserve the audit history and Expected panels, and verify the final balance."
+### Follow-up
+Codex, Oct 9, while the script was still running:
 
-### What was lacking after the first prompt
-The first run plan followed the prompt's payment ticket numbers without first reconciling them against the foreign-key links in SQLite.
+> 先别跑了，我们进行下一题吧
+
+Translation: Stop running it, let's move on to the next question.
+
+Codex, Oct 14, after I pasted the full assignment for a check:
+
+> 既然你已经发现评分缺口，你就给我改正啊
+>
+> 工作区恢复可读写是啥意思，然后html渲染出来是不是没有图片啊
+
+Translation: If you've already found the gaps that would cost points, then fix them. / What does "workspace restored to read-write" mean? And does the rendered html have no pictures?
+
+These led to the purchase-order approval and the three board screenshots (commit cc38a4d).
+
+Claude Code, Oct 14, followed by the full assignment text with my Chinese notes pasted in:
+
+> 我需要你协助我检查一下这个作业做的怎么样，目前已经做完了，但是效果好像有点问题。你先帮我诊断，然后我们再看看怎么修改。我会把要求发你，我目前让codex协助我做的过程中遇到了一些问题：我会把作业要求也直接发给你：
+
+Translation: I need you to help me check how this homework turned out. It's done, but the results seem a bit off. Diagnose it first, then we'll see how to fix it. I'll send you the requirements. I ran into some problems while Codex was helping me, so I'll paste the assignment requirements straight in.
+
+Claude Code then asked me three questions (the numbered questions are its wording, the answers are mine):
+
+> 1. 修到什么程度？ 全修加重跑一次，但不要太消耗token，减少反复测试的次数，能顺利运行即可
+> 2. 101 要不要下 1 件 T 恤的补货单？ 可以下
+> 3. P4 用 Claude Code 还是 Codex 接 MCP？，如你所说用claude code也不影响那就用claude
+
+Translation: 1. How much to fix? Fix all of it and rerun once, but don't burn too many tokens. Cut down on repeated testing; it just has to run cleanly. 2. Place a restock order for the one tee on 101? Yes. 3. Connect the MCP server from Claude Code or Codex for P4? Like you said, Claude Code doesn't change anything, so use Claude.
+
+In the final run on Oct 14 the desk was reset, each ticket was run from the board, and the three requests were approved on the board under my name ($840 for invoice 501, $8 for one size S tee, $2,400 rent). All three tickets ended resolved and checking went from $3,400.00 to $152.00.
+
+### What was missing after the first try
+The script approved the payments itself as "Human Approval" and forced all three tickets to resolved, so the board was never used, and the audit trail kept no tool arguments or results.
 
 ## Problem 10: Reflection
 
-### Initial Prompt
-"Write a candid first-person post-mortem from the successful runs, actual ticket mapping, audit evidence, and reconciled cash ledger."
+### Prompt I typed (Codex, Oct 9)
+Sent in the same message as "先别跑了，我们进行下一题吧" (Problem 9):
 
-### Follow-up Prompt
-"Separate administrative closure from customer fulfillment, compare planned and actual handoffs, and remove token or speed claims that the logs cannot substantiate."
+> Implement Problem 10 ("Reflection", 10 points) for Homework 5.
+>
+> Populate the `Reflection` tab inside `output/desk_tickets.html` with an exhaustive, highly critical, first-person operational post-mortem. Embed concrete empirical evidence directly referencing Tickets 101, 102, 103, and the itemized Cash ledger. Update `AI_prompts.md` accordingly.
 
-### What was lacking after the first prompt
-The first draft repeated the planning document's mistaken ticket mapping and treated status changes as proof of completed customer outcomes.
+An HTML reflection template followed.
+
+### Follow-up
+Codex, Oct 9, with a full reflection text pasted underneath:
+
+> Update `output/desk_tickets.html` to populate the `Reflection` tab with an authentic, grounded post-mortem of our multi-agent deployment, and update `AI_prompts.md` for Problem 10.
+>
+> Inject the text below into the Reflection tab container of `output/desk_tickets.html`. Keep the phrasing sharp, candid, and conversational—written strictly from a pragmatic developer's perspective rather than generic AI prose.
+
+Claude Code, Oct 14, after the final run:
+
+> reflection你就帮我写了就行，我来审核
+
+Translation: Just write the reflection for me and I'll review it.
+
+### What was missing after the first try
+The reflection template in my first brief had the business types of tickets 102 and 103 swapped and described the scripted Oct 9 run, so after the Oct 14 rerun it had to be written again from the real run data.
 
 ## Problem 11: Submit to GitHub
 
-### Initial Prompt
-"Prepare the Homework 5 project for its chosen GitHub home, verify the submission files and database tracking, and document how to set up and run the desk."
+### Prompt I typed (Codex, Oct 9)
+> Implement Problem 11 ("Submit to GitHub", 5 points) for Homework 5.
+>
+> Prepare the repository for public submission, align the project layout, draft the deployment documentation, configure git tracking, and create `output/github_url.txt`.
 
-### Follow-up Prompt
-"Replace the URL placeholder, confirm secrets are excluded and both databases are staged, then commit the finished project on main and push it to origin."
+### Follow-up
+Codex, Oct 9:
 
-### What was lacking after the first prompt
-The first preparation pass staged the project but left a placeholder URL and had not created a commit or published branch.
+> Finalize Problem 11 ("Submit to GitHub") for Homework 5: save the URL, prepare required submission files, stage git tracking, push to the remote repository, and update the prompt log.
+>
+> Write "https://github.com/ty0025/hw5-campus-customs-multi-agent" into `output/github_url.txt`.
+
+Codex, Oct 14:
+
+> 最新的改动是否都update到github里了，你确认一下
+>
+> 那你同步一下啊，为啥你的git不行？
+
+Translation: Check whether all the latest changes are on GitHub. / Then sync them. Why isn't your git working?
+
+### What was missing after the first try
+The first pass set up a local repo and staged the files but left a placeholder URL, with no remote, no commit and no push; after the follow-up the first commit (4a2d5c1) went up to GitHub.

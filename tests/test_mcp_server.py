@@ -85,7 +85,9 @@ class ShopToolTests(DatabaseGuard, unittest.TestCase):
                 self.assertEqual((result.total_unpaid, result.lead_days), (0, lead_days))
 
     def test_ticket_102_lease_is_due_in_two_shop_days(self) -> None:
-        result = server.get_lease_due_status(1)
+        # Uses a copy of the original database: after a full run the rent is paid and next_due moves to October.
+        with patch.object(server, "WORKING_DB_PATH", self.pristine_fixture_path):
+            result = server.get_lease_due_status(1)
         self.assertEqual((result.space_name, result.landlord), ("Chapel Street shop", "Elm City Properties"))
         self.assertEqual((result.monthly_rent, result.next_due), (2400, date(2026, 9, 2)))
         self.assertEqual((result.shop_date, result.days_until_due, result.status),

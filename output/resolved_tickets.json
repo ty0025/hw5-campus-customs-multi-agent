@@ -1,56 +1,256 @@
-[
-  {
-    "ticket_id": 101,
-    "final_status": "resolved",
-    "outcome": "Invoice 501 was cleared and the vendor shipment hold is removed; size S remains out of stock, with a backorder draft saved and no shipment claimed.",
-    "agent_contributions": {
-      "Boss": "thinking_started: Agent analysis started; only concise operational events are logged, not hidden chain-of-thought. delegation: Delegated a bounded specialist task: Check availability and any restock implications for one CC-TEE-WHITE, size S, for ticket 101. Report verified stock facts and whether customer fulfillment can proceed or is blocked. response_synthesis: Structured result prepared: The requested Bulldog tee cannot currently be fulfilled. The ticket is waiting for human approval of the vendor invoice payment proposal; no payment or restock has occurred. ticket_run_completed: Ticket run completed with status waiting_approval; human approval=True.",
-      "Inventory": "tool_call_started: Calling the approved local FastMCP tool; arguments are not copied to the audit log. tool_call_completed: FastMCP returned recorded shop data or a local board result. delegation: Delegated a bounded specialist task: For ticket 101, verify cash and stage the referenced invoice payment proposal for human approval before any restock request is considered. response_synthesis: Structured result prepared: Ticket 101 cannot be fulfilled from current stock: the requested tee is out of stock. Restock is blocked because the recorded vendor has an unpaid invoice; Accounting has verified cash and staged the exact invoice payment proposal for human approval, but no payment has been made.",
-      "Accounting": "thinking_started: Agent analysis started; only concise operational events are logged, not hidden chain-of-thought. tool_call_started: Calling the approved local FastMCP tool; arguments are not copied to the audit log. tool_call_completed: FastMCP returned recorded shop data or a local board result. response_synthesis: Structured result prepared: Verified sufficient checking cash and staged the exact invoice-linked payment proposal for human approval. No funds have been paid; vendor remains blocked until the proposal is approved and the invoice is settled."
-    },
-    "human_approvals": [
+{
+  "run": {
+    "reset_at": "2026-10-14T03:54:18.977348Z",
+    "reset_note": "Working database reset from data/campus_customs.db. Starting checking balance $3,400.00.",
+    "model": "gpt-6-luna via Portkey",
+    "ending_checking_balance": 152.0,
+    "payments_ledger": [
       {
-        "approval_id": 1,
-        "payment_id": 1,
+        "id": 1,
+        "kind": "invoice",
+        "ref_id": 501,
         "amount": 840.0,
-        "recipient": "Bulldog Print Co",
-        "reference_type": "invoice",
-        "reference_id": 501,
-        "status": "PAID"
-      }
-    ]
-  },
-  {
-    "ticket_id": 102,
-    "final_status": "resolved",
-    "outcome": "The recorded monthly rent liability was paid through human approval and the lease is marked PAID.",
-    "agent_contributions": {
-      "Boss": "thinking_started: Agent analysis started; only concise operational events are logged, not hidden chain-of-thought. delegation: Delegated a bounded specialist task: Check the lease due status and report the verified rent amount, due date, and any arrears/notice facts for lease 1. Do not contact landlord or make payment. response_synthesis: Structured result prepared: Rent notice verified. The $2,400 rent payment is due September 2, 2026; no arrears are recorded. A payment proposal is pending human approval, so the ticket is waiting for approval and no payment has been made. ticket_run_completed: Ticket run completed with status waiting_approval; human approval=True.",
-      "Facilities": "tool_call_started: Calling the approved local FastMCP tool; arguments are not copied to the audit log. tool_call_completed: FastMCP returned recorded shop data or a local board result. delegation: Delegated a bounded specialist task: Ticket 102 / lease 1: check liquidity and stage a PENDING_APPROVAL payment proposal for the upcoming rent obligation. Do not execute payment. If funds are insufficient or lease reference is unclear, report blocker to Boss and leave ticket awaiting staff action. response_synthesis: Structured result prepared: Verified lease 1 rent notice against the shop business date. Rent is upcoming; no arrears are recorded in the lease status. Accounting checked liquidity and staged a proposal for human approval; no payment was made.",
-      "Accounting": "thinking_started: Agent analysis started; only concise operational events are logged, not hidden chain-of-thought. tool_call_started: Calling the approved local FastMCP tool; arguments are not copied to the audit log. tool_call_completed: FastMCP returned recorded shop data or a local board result. response_synthesis: Structured result prepared: Rent proposal staged for human approval; no payment was executed."
-    },
-    "human_approvals": [
+        "account": "checking",
+        "paid_at": "2026-08-31",
+        "approved_by": "Tongyu Chen"
+      },
       {
-        "approval_id": 2,
-        "payment_id": 2,
+        "id": 2,
+        "kind": "purchase_order",
+        "ref_id": 1,
+        "amount": 8.0,
+        "account": "checking",
+        "paid_at": "2026-08-31",
+        "approved_by": "Tongyu Chen"
+      },
+      {
+        "id": 3,
+        "kind": "lease",
+        "ref_id": 1,
         "amount": 2400.0,
-        "recipient": "Elm City Properties",
-        "reference_type": "lease",
-        "reference_id": 1,
-        "status": "PAID"
+        "account": "checking",
+        "paid_at": "2026-08-31",
+        "approved_by": "Tongyu Chen"
       }
-    ]
+    ],
+    "total_agent_tokens": 95817
   },
-  {
-    "ticket_id": 103,
-    "final_status": "resolved",
-    "outcome": "The requested bulk discount was reviewed; stock is short by 12 hoodies, so an unsent review draft records that no discount or delivery date is confirmed.",
-    "agent_contributions": {
-      "Boss": "delegation: Delegated a bounded specialist task: Check pricing and margin for CC-HOOD-NAVY and assess whether a bulk discount proposal can be supported for 20 units; report pricing/margin facts and any approval or cash blocker, without executing payment. delegation: Delegated a bounded specialist task: Prepare and save a local customer draft to Yale AI Club acknowledging the bulk discount request and asking them to specify desired discounted unit price or target budget, while transparently noting current availability is 8 of 20 and remaining 12 need restock confirmation. Do not send it or promise response_synthesis: Structured result prepared: Moved Ticket 103 to waiting_customer. Current stock is insufficient for the requested 20 hoodies, and the discount cannot be evaluated until the customer gives a target price or budget. ticket_run_completed: Ticket run completed with status waiting",
-      "Inventory": "thinking_started: Agent analysis started; only concise operational events are logged, not hidden chain-of-thought. tool_call_started: Calling the approved local FastMCP tool; arguments are not copied to the audit log. tool_call_completed: FastMCP returned recorded shop data or a local board result. response_synthesis: Structured result prepared: Stock check for the requested CC-HOOD-NAVY, size M hoodie order found a shortfall. Ticket 103 has no recorded invoice/vendor linkage, so vendor restock eligibility cannot be checked from the available facts.",
-      "Accounting": "thinking_started: Agent analysis started; only concise operational events are logged, not hidden chain-of-thought. tool_call_started: Calling the approved local FastMCP tool; arguments are not copied to the audit log. tool_call_completed: FastMCP returned recorded shop data or a local board result. response_synthesis: Structured result prepared: Pricing facts checked for CC-HOOD-NAVY. The recorded list price is $58.00/unit and cost is $22.00/unit, yielding $36.00 gross margin per unit (62.07% gross margin). No requested discount amount was provided, so a discounted price cannot be evaluated against cost yet.",
-      "Customer Service": "thinking_started: Agent analysis started; only concise operational events are logged, not hidden chain-of-thought. tool_call_started: Calling the approved local FastMCP tool; arguments are not copied to the audit log. tool_call_completed: FastMCP returned recorded shop data or a local board result. response_synthesis: Structured result prepared: Saved a local, unsent draft to Yale AI Club acknowledging the bulk hoodie request, asking for a target unit price or budget, and noting that only 8 of 20 size-M hoodies are on hand; restock of the remaining 12 is unconfirmed."
+  "tickets": [
+    {
+      "id": 101,
+      "subject": "Bulldog tee (Tauhid Zaman)",
+      "final_status": "resolved",
+      "outcome": "Closed the customer order after confirming the invoice payment and restock purchase order are both approved. Size S is out of stock; the approved order is expected to arrive 2026-09-05. Customer Service saved a draft update, which has not been sent.",
+      "agent_contributions": {
+        "Accounting": "Checking balance is $3,400.00 as of 2026-08-31. Vendor Bulldog Print Co invoice 501 for $840.00 is open and 3 days overdue. Exact inventory shortfall is 1 CC-TEE-WHITE, size S. Staged invoice payment approval #1 for $840.00 payable to Bulldog Print Co, waiting for human approval. Staged restock PO approval #2 for exactly 1 tee, amount $8.00, payable to Bulldog Print Co, waiting for invoice 501 payment approval and human approval. Neither has been paid; no shipment or arrival is claimed. Projected cash after invoice approval alone is $2,560.00; PO also awaits approval.",
+        "Inventory": "Ticket 101: 0 of 1 CC-TEE-WHITE, size S, is on hand; shortfall is 1. Stock location is Aisle B. The linked apparel supplier is Bulldog Print Co (vendor 1). Accounting staged the invoice payment and exact-quantity restock PO for approval; neither has been paid or ordered yet.",
+        "Boss": "No CC-TEE-WHITE size S tees are on hand (0 of 1). Bulldog Print Co is blocked by overdue invoice 501 ($840). Accounting staged the $840 invoice payment and an exact-quantity restock PO for $8; both are pending human approval. No payment or order is confirmed. / Closed the customer order after confirming the invoice payment and restock purchase order are both approved. Size S is out of stock; the approved order is expected to arrive 2026-09-05. Customer Service saved a draft update, which has not been sent.",
+        "Customer Service": "Saved customer-facing draft for Tauhid Zaman (draft ID 1). It says size S is out of stock and is expected around 2026-09-05 following the approved restock order. The draft has not been sent."
+      },
+      "delegations": [
+        "Boss → Inventory",
+        "Inventory → Accounting",
+        "Boss → Customer Service"
+      ],
+      "mcp_tools_by_agent": {
+        "Boss": {
+          "get_ticket_details": 7,
+          "update_ticket_status": 2
+        },
+        "Inventory": {
+          "get_ticket_details": 1,
+          "check_inventory_stock": 1,
+          "find_restock_vendors": 1
+        },
+        "Accounting": {
+          "get_ticket_details": 1,
+          "get_cash_balance": 1,
+          "check_vendor_restock_eligibility": 1,
+          "check_inventory_stock": 1,
+          "propose_payment": 1,
+          "propose_purchase_order": 1
+        },
+        "Customer Service": {
+          "get_ticket_details": 1,
+          "save_customer_draft": 1
+        }
+      },
+      "human_approvals": [
+        {
+          "approval_id": 1,
+          "kind": "payment",
+          "amount": 840.0,
+          "payee": "Bulldog Print Co",
+          "status": "approved",
+          "approved_by": "Tongyu Chen",
+          "decided_at": "2026-10-14T03:56:21+00:00",
+          "effect": "Payment 1: invoice 501 marked paid."
+        },
+        {
+          "approval_id": 2,
+          "kind": "purchase_order",
+          "amount": 8.0,
+          "payee": "Bulldog Print Co",
+          "status": "approved",
+          "approved_by": "Tongyu Chen",
+          "decided_at": "2026-10-14T03:56:22+00:00",
+          "effect": "Payment 2: purchase order 1: 1 x CC-TEE-WHITE S from Bulldog Print Co, expected 2026-09-05."
+        }
+      ],
+      "customer_drafts": [
+        {
+          "id": 1,
+          "body": "Hi Tauhid, size S is currently out of stock. Following the approved restock order, it’s expected around 2026-09-05. Thanks for your patience!\n\nCampus Customs",
+          "status": "draft"
+        }
+      ],
+      "agent_runs": [
+        {
+          "run_id": "86da4dcf-69ca-4a2b-a5fc-93541fa7c47b",
+          "finished": "2026-10-14T03:55:40.761694Z",
+          "result": "Status waiting_approval. No CC-TEE-WHITE size S tees are on hand (0 of 1). Bulldog Print Co is blocked by overdue invoice 501 ($840). Accounting staged the $840 invoice payment and an exact-quantity restock PO for $8; both are pending human approval. No payment or order is confirmed.",
+          "usage": {
+            "agent_turns": 3,
+            "requests": 13,
+            "total_tokens": 28227,
+            "mcp_calls": 14
+          }
+        },
+        {
+          "run_id": "0626462c-5b93-490f-a04f-280f2bcfd1bb",
+          "finished": "2026-10-14T03:57:07.779056Z",
+          "result": "Status resolved. Closed the customer order after confirming the invoice payment and restock purchase order are both approved. Size S is out of stock; the approved order is expected to arrive 2026-09-05. Customer Service saved a draft update, which has not been sent.",
+          "usage": {
+            "agent_turns": 2,
+            "requests": 7,
+            "total_tokens": 15006,
+            "mcp_calls": 6
+          }
+        }
+      ]
     },
-    "human_approvals": []
-  }
-]
+    {
+      "id": 102,
+      "subject": "Rent due (Elm City Properties)",
+      "final_status": "resolved",
+      "outcome": "The approved rent payment is complete, so I resolved the ticket. Approval records $2,400 paid to Elm City Properties and moves the next rent due date to 2026-10-02.",
+      "agent_contributions": {
+        "Accounting": "Checking balance is $2,552.00 as of 2026-08-31. Lease 1 rent of $2,400.00 to Elm City Properties is due 2026-09-02 (2 days away), with no payments recorded. Staged the full rent payment for human approval as proposal ID 3; projected checking balance after approval is $152.00.",
+        "Facilities": "Lease 1 is for the Chapel Street shop with Elm City Properties. Monthly rent is $2,400.00, due 2026-09-02. Using the desk date 2026-08-31, rent is upcoming and due in 2 days; no payment is recorded. Accounting checked cash and staged the full $2,400.00 payment (proposal ID 3, reference lease:1) for human approval. Checking balance was $2,552.00, with $152.00 projected after approval.",
+        "Boss": "Lease 1 rent of $2,400 is due September 2, 2026, two days after the desk date. Facilities confirmed no payment is recorded; Accounting staged the full payment, but it has not been made. / The approved rent payment is complete, so I resolved the ticket. Approval records $2,400 paid to Elm City Properties and moves the next rent due date to 2026-10-02."
+      },
+      "delegations": [
+        "Boss → Facilities",
+        "Facilities → Accounting"
+      ],
+      "mcp_tools_by_agent": {
+        "Boss": {
+          "get_ticket_details": 7,
+          "update_ticket_status": 2
+        },
+        "Facilities": {
+          "get_lease_due_status": 1
+        },
+        "Accounting": {
+          "get_cash_balance": 1,
+          "get_lease_due_status": 1,
+          "propose_payment": 1
+        }
+      },
+      "human_approvals": [
+        {
+          "approval_id": 3,
+          "kind": "payment",
+          "amount": 2400.0,
+          "payee": "Elm City Properties",
+          "status": "approved",
+          "approved_by": "Tongyu Chen",
+          "decided_at": "2026-10-14T03:56:50+00:00",
+          "effect": "Payment 3: lease 1 rent paid; next_due moved to 2026-10-02."
+        }
+      ],
+      "customer_drafts": [],
+      "agent_runs": [
+        {
+          "run_id": "4a9e78c7-3785-46b6-ae47-f52715cac612",
+          "finished": "2026-10-14T03:56:47.725696Z",
+          "result": "Status waiting_approval. Lease 1 rent of $2,400 is due September 2, 2026, two days after the desk date. Facilities confirmed no payment is recorded; Accounting staged the full payment, but it has not been made.",
+          "usage": {
+            "agent_turns": 3,
+            "requests": 11,
+            "total_tokens": 20419,
+            "mcp_calls": 9
+          }
+        },
+        {
+          "run_id": "7e3f6386-f26a-4c85-bd83-fb59dfad6829",
+          "finished": "2026-10-14T03:57:15.568905Z",
+          "result": "Status resolved. The approved rent payment is complete, so I resolved the ticket. Approval records $2,400 paid to Elm City Properties and moves the next rent due date to 2026-10-02.",
+          "usage": {
+            "agent_turns": 1,
+            "requests": 3,
+            "total_tokens": 6598,
+            "mcp_calls": 4
+          }
+        }
+      ]
+    },
+    {
+      "id": 103,
+      "subject": "Bulk hoodie discount (Yale AI Club)",
+      "final_status": "resolved",
+      "outcome": "Offered Yale AI Club the standard 10% bulk discount on 20 medium navy hoodies: $52.20 each, $1,044 total. Ticket marked resolved; customer draft saved but not sent.",
+      "agent_contributions": {
+        "Accounting": "Checked CC-HOOD-NAVY (20, size M). List price is $58.00/unit; unit cost is $22.00. At 10% off, price is $52.20/unit, margin $30.20/unit (57.85%), order revenue $1,044.00, cost $440.00, gross profit $604.00. At 15% off, price is $49.30/unit, margin $27.30/unit (55.38%), order revenue $986.00, cost $440.00, gross profit $546.00. Both options exceed the 50% margin floor and stay above unit cost. Checking balance is $152.00; no purchase/payment request was staged, per task.",
+        "Inventory": "Stock check for Yale AI Club: 8 medium navy hoodies on hand in Aisle A against 20 requested; shortfall is 12. No purchase order was staged.",
+        "Customer Service": "Saved customer-facing draft for Yale AI Club (draft ID 2). It offers 20 medium navy hoodies at $52.20 each, $1,044 total; notes 8 are currently available and the remaining 12 depend on a restock order that has not been placed; asks whether they want to proceed with a split fulfillment or wait for all 20.",
+        "Boss": "Offered Yale AI Club the standard 10% bulk discount on 20 medium navy hoodies: $52.20 each, $1,044 total. Ticket marked resolved; customer draft saved but not sent."
+      },
+      "delegations": [
+        "Boss → Inventory",
+        "Boss → Accounting",
+        "Boss → Customer Service"
+      ],
+      "mcp_tools_by_agent": {
+        "Boss": {
+          "get_ticket_details": 3,
+          "update_ticket_status": 1
+        },
+        "Inventory": {
+          "get_ticket_details": 1,
+          "check_inventory_stock": 1,
+          "find_restock_vendors": 1
+        },
+        "Accounting": {
+          "get_pricing_and_margin": 2,
+          "get_cash_balance": 1,
+          "get_ticket_details": 1
+        },
+        "Customer Service": {
+          "save_customer_draft": 1
+        }
+      },
+      "human_approvals": [],
+      "customer_drafts": [
+        {
+          "id": 2,
+          "body": "Hi Yale AI Club,\n\nWe can offer the 20 medium navy hoodies at $52.20 each ($1,044.00 total). We currently have 8 available; the remaining 12 depend on a restock order, which has not been placed, so their availability is not yet confirmed. Would you like to proceed with the offer and split fulfillment—8 now and the rest if restocked—or would you prefer to wait until all 20 are available?\n\nCampus Customs",
+          "status": "draft"
+        }
+      ],
+      "agent_runs": [
+        {
+          "run_id": "9202deda-cd6d-4e16-be6b-e16ee4a3c9e4",
+          "finished": "2026-10-14T03:57:42.005157Z",
+          "result": "Status resolved. Offered Yale AI Club the standard 10% bulk discount on 20 medium navy hoodies: $52.20 each, $1,044 total. Ticket marked resolved; customer draft saved but not sent.",
+          "usage": {
+            "agent_turns": 4,
+            "requests": 12,
+            "total_tokens": 25567,
+            "mcp_calls": 12
+          }
+        }
+      ]
+    }
+  ]
+}

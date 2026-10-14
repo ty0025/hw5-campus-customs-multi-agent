@@ -1,7 +1,7 @@
 {
   "mcpServers": {
     "campus_customs_mcp": {
-      "command": "python",
+      "command": "py",
       "args": ["-m", "mcp_server.server"],
       "env": {
         "PYTHONPATH": "."

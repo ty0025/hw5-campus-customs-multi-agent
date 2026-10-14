@@ -16,13 +16,19 @@ from typing import Annotated, Literal
 
 PROJECT_ROOT = Path(__file__).resolve().parents[1]
 
-# The supplied MCP config invokes plain "python"; use this project's installed
-# dependencies when launched as a module, without changing the global environment.
+# .mcp.json starts the server with whatever Python is on PATH ("py" on Windows).
+# When launched as a module, switch to this project's .venv so its packages are used.
 # Normal imports do not switch interpreters or start a transport.
 if __name__ == "__main__":
     _local_python = PROJECT_ROOT / ".venv" / ("Scripts/python.exe" if os.name == "nt" else "bin/python")
     if _local_python.is_file() and Path(sys.executable).absolute() != _local_python.absolute():
-        os.execv(str(_local_python), [str(_local_python), "-B", "-m", "mcp_server.server", *sys.argv[1:]])
+        _command = [str(_local_python), "-B", "-m", "mcp_server.server", *sys.argv[1:]]
+        if os.name == "nt":
+            # Windows has no real exec: this process would exit and the MCP client
+            # would see the server close. Stay alive and let the child share stdio.
+            import subprocess
+            raise SystemExit(subprocess.call(_command))
+        os.execv(_command[0], _command)
 
 from mcp.server.fastmcp import FastMCP
 from mcp.types import ToolAnnotations

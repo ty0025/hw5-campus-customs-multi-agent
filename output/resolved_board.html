@@ -1,13 +1,131 @@
 <!doctype html>
-<html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1">
-<title>Campus Customs · Resolved Board</title><style>
-:root{--navy:#142b4a;--blue:#1d4ed8;--sky:#eaf3ff;--ink:#1e293b;--muted:#64748b;--line:#d9e3ef;--paper:#f4f8fc;--green:#047857;--amber:#d97706}
-*{box-sizing:border-box}body{margin:0;background:radial-gradient(ellipse at 8% 0%,#dbeafe 0,transparent 34%),var(--paper);color:var(--ink);font:15px/1.55 Inter,Segoe UI,Arial,sans-serif}
-header{background:linear-gradient(115deg,#102746,#1e4f89 65%,#2b73b8);color:#fff;padding:44px max(5vw,24px) 38px;box-shadow:0 10px 28px #16375a22}header .eyebrow{letter-spacing:.16em;font-size:11px;font-weight:800;opacity:.78}h1{margin:8px 0;font-size:clamp(30px,4vw,48px);letter-spacing:-.04em}header p:last-child{color:#dceaff;margin:0}
-.metrics{display:flex;flex-wrap:wrap;gap:12px;margin-top:24px}.metric{border:1px solid #ffffff35;background:#ffffff12;padding:11px 15px;border-radius:12px;min-width:170px}.metric span{display:block;font-size:10px;text-transform:uppercase;letter-spacing:.12em;color:#cfe2ff}.metric strong{font-size:19px}
-main{max-width:1440px;padding:30px 24px 54px;margin:auto}.mapping{padding:13px 17px;border-radius:12px;border:1px solid #fed7aa;background:#fff7ed;color:#854d0e;margin-bottom:22px}.grid{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:18px;align-items:start}
-.ticket-card{background:#fff;border:1px solid var(--line);border-radius:19px;padding:22px;box-shadow:0 12px 28px #173b6210}.card-top{display:flex;justify-content:space-between;gap:12px;align-items:flex-start}.card-top .eyebrow{color:#64748b;font-size:10px;letter-spacing:.13em;font-weight:800}h2{font-size:22px;line-height:1.2;margin:6px 0 0;color:var(--navy)}.resolved{white-space:nowrap;color:var(--green);background:#d1fae5;border:1px solid #a7f3d0;padding:6px 9px;border-radius:99px;font-size:10px;font-weight:900;letter-spacing:.08em}.outcome{color:#475569;min-height:82px}
-section{border-top:1px solid #edf2f7;padding-top:14px;margin-top:15px}h3{margin:0 0 9px;font-size:11px;letter-spacing:.1em;text-transform:uppercase;color:#56708e}.contributors{list-style:none;padding:0;margin:0;display:grid;gap:10px}.contributors li{display:grid;gap:3px;padding-left:11px;border-left:3px solid #60a5fa}.contributors b{color:#173b66;font-size:12px}.contributors span{color:#64748b;font-size:12px;line-height:1.45}.payment{display:grid;grid-template-columns:1fr auto;gap:2px 10px;align-items:center;padding:11px;background:#f0fdf4;border:1px solid #bbf7d0;border-radius:11px}.payment strong{color:#047857}.payment small{grid-column:1/-1;color:#64748b}.payment.none{display:block;background:#f8fafc;border-color:#e2e8f0;color:#64748b}.chain p{color:#475569;font-size:12px;margin:0}figure{margin:16px 0 0;background:#f8fbff;border:1px dashed #cbd9e8;border-radius:12px;padding:10px}figure img{display:block;width:100%;height:150px;object-fit:contain;color:#94a3b8;font-size:12px}figcaption{font-size:10px;color:#94a3b8;margin-top:5px}
-footer{text-align:center;color:#8090a5;font-size:12px;padding:26px}@media(max-width:1050px){.grid{grid-template-columns:1fr 1fr}}@media(max-width:700px){header{padding-top:30px}.grid{grid-template-columns:1fr}main{padding:20px 14px 36px}.ticket-card{padding:18px}}
-</style></head><body><header><p class="eyebrow">LOCAL OPERATIONS RECORD</p><h1>Resolved ticket board</h1><p>Agent work, human approvals, and the reconciled checking balance.</p><div class="metrics"><div class="metric"><span>Starting checking</span><strong>$3,400.00</strong></div><div class="metric"><span>Approved disbursements</span><strong>$3,240.00</strong></div><div class="metric"><span>Ending checking</span><strong>$160.00</strong></div></div></header>
-<main><div class="mapping"><strong>Database mapping:</strong> Ticket 101 owns invoice 501; Ticket 102 owns lease 1; Ticket 103 is the hoodie discount request. Cash movements follow the invoice and lease references stored on each ticket.</div><p class="mapping">Agent contribution text captures each model run before the separate human approvals listed below. Ticket status records administrative closure; it does not prove customer fulfillment.</p><div class="grid"><article class="ticket-card"><div class="card-top"><div><p class="eyebrow">CAMPUS CUSTOMS · TICKET 101</p><h2>Bulldog tee</h2></div><span class="resolved">RESOLVED</span></div><p class="outcome">Invoice 501 was cleared and the vendor shipment hold is removed; size S remains out of stock, with a backorder draft saved and no shipment claimed.</p><section><h3>Specialist contributions</h3><ul class="contributors"><li><b>Boss</b><span>thinking_started: Agent analysis started; only concise operational events are logged, not hidden chain-of-thought. delegation: Delegated a bounded specialist task: Check availability and any restock implications for one CC-TEE-WHITE, size S, for ticket 101. Report verified stock facts and whether customer fulfillment can proceed or is blocked. response_synthesis: Structured result prepared: The requested Bulldog tee cannot currently be fulfilled. The ticket is waiting for human approval of the vendor invoice payment proposal; no payment or restock has occurred. ticket_run_completed: Ticket run completed with status waiting_approval; human approval=True.</span></li><li><b>Inventory</b><span>tool_call_started: Calling the approved local FastMCP tool; arguments are not copied to the audit log. tool_call_completed: FastMCP returned recorded shop data or a local board result. delegation: Delegated a bounded specialist task: For ticket 101, verify cash and stage the referenced invoice payment proposal for human approval before any restock request is considered. response_synthesis: Structured result prepared: Ticket 101 cannot be fulfilled from current stock: the requested tee is out of stock. Restock is blocked because the recorded vendor has an unpaid invoice; Accounting has verified cash and staged the exact invoice payment proposal for human approval, but no payment has been made.</span></li><li><b>Accounting</b><span>thinking_started: Agent analysis started; only concise operational events are logged, not hidden chain-of-thought. tool_call_started: Calling the approved local FastMCP tool; arguments are not copied to the audit log. tool_call_completed: FastMCP returned recorded shop data or a local board result. response_synthesis: Structured result prepared: Verified sufficient checking cash and staged the exact invoice-linked payment proposal for human approval. No funds have been paid; vendor remains blocked until the proposal is approved and the invoice is settled.</span></li></ul></section><section><h3>Approved disbursements</h3><div class="payment"><span>Bulldog Print Co</span><strong>$840.00</strong><small>invoice 501 · PAID</small></div></section><section class="chain"><h3>Delegation</h3><p>Boss → Inventory · Inventory → Accounting</p></section><figure><img src="ticket_101.png" alt="Ticket 101 React dashboard snapshot" /><figcaption>React dashboard snapshot, rendered offline from the saved resolved-state data.</figcaption></figure></article><article class="ticket-card"><div class="card-top"><div><p class="eyebrow">CAMPUS CUSTOMS · TICKET 102</p><h2>Rent due</h2></div><span class="resolved">RESOLVED</span></div><p class="outcome">The recorded monthly rent liability was paid through human approval and the lease is marked PAID.</p><section><h3>Specialist contributions</h3><ul class="contributors"><li><b>Boss</b><span>thinking_started: Agent analysis started; only concise operational events are logged, not hidden chain-of-thought. delegation: Delegated a bounded specialist task: Check the lease due status and report the verified rent amount, due date, and any arrears/notice facts for lease 1. Do not contact landlord or make payment. response_synthesis: Structured result prepared: Rent notice verified. The $2,400 rent payment is due September 2, 2026; no arrears are recorded. A payment proposal is pending human approval, so the ticket is waiting for approval and no payment has been made. ticket_run_completed: Ticket run completed with status waiting_approval; human approval=True.</span></li><li><b>Facilities</b><span>tool_call_started: Calling the approved local FastMCP tool; arguments are not copied to the audit log. tool_call_completed: FastMCP returned recorded shop data or a local board result. delegation: Delegated a bounded specialist task: Ticket 102 / lease 1: check liquidity and stage a PENDING_APPROVAL payment proposal for the upcoming rent obligation. Do not execute payment. If funds are insufficient or lease reference is unclear, report blocker to Boss and leave ticket awaiting staff action. response_synthesis: Structured result prepared: Verified lease 1 rent notice against the shop business date. Rent is upcoming; no arrears are recorded in the lease status. Accounting checked liquidity and staged a proposal for human approval; no payment was made.</span></li><li><b>Accounting</b><span>thinking_started: Agent analysis started; only concise operational events are logged, not hidden chain-of-thought. tool_call_started: Calling the approved local FastMCP tool; arguments are not copied to the audit log. tool_call_completed: FastMCP returned recorded shop data or a local board result. response_synthesis: Structured result prepared: Rent proposal staged for human approval; no payment was executed.</span></li></ul></section><section><h3>Approved disbursements</h3><div class="payment"><span>Elm City Properties</span><strong>$2,400.00</strong><small>lease 1 · PAID</small></div></section><section class="chain"><h3>Delegation</h3><p>Boss → Facilities · Facilities → Accounting</p></section><figure><img src="ticket_102.png" alt="Ticket 102 React dashboard snapshot" /><figcaption>React dashboard snapshot, rendered offline from the saved resolved-state data.</figcaption></figure></article><article class="ticket-card"><div class="card-top"><div><p class="eyebrow">CAMPUS CUSTOMS · TICKET 103</p><h2>Bulk hoodie discount</h2></div><span class="resolved">RESOLVED</span></div><p class="outcome">The database status is RESOLVED, but the business request remains open in practice: stock is short by 12 hoodies, the customer has not supplied a target price, and no discount or delivery date is confirmed.</p><section><h3>Specialist contributions</h3><ul class="contributors"><li><b>Boss</b><span>delegation: Delegated a bounded specialist task: Check pricing and margin for CC-HOOD-NAVY and assess whether a bulk discount proposal can be supported for 20 units; report pricing/margin facts and any approval or cash blocker, without executing payment. delegation: Delegated a bounded specialist task: Prepare and save a local customer draft to Yale AI Club acknowledging the bulk discount request and asking them to specify desired discounted unit price or target budget, while transparently noting current availability is 8 of 20 and remaining 12 need restock confirmation. Do not send it or promise response_synthesis: Structured result prepared: Moved Ticket 103 to waiting_customer. Current stock is insufficient for the requested 20 hoodies, and the discount cannot be evaluated until the customer gives a target price or budget. ticket_run_completed: Ticket run completed with status waiting</span></li><li><b>Inventory</b><span>thinking_started: Agent analysis started; only concise operational events are logged, not hidden chain-of-thought. tool_call_started: Calling the approved local FastMCP tool; arguments are not copied to the audit log. tool_call_completed: FastMCP returned recorded shop data or a local board result. response_synthesis: Structured result prepared: Stock check for the requested CC-HOOD-NAVY, size M hoodie order found a shortfall. Ticket 103 has no recorded invoice/vendor linkage, so vendor restock eligibility cannot be checked from the available facts.</span></li><li><b>Accounting</b><span>thinking_started: Agent analysis started; only concise operational events are logged, not hidden chain-of-thought. tool_call_started: Calling the approved local FastMCP tool; arguments are not copied to the audit log. tool_call_completed: FastMCP returned recorded shop data or a local board result. response_synthesis: Structured result prepared: Pricing facts checked for CC-HOOD-NAVY. The recorded list price is $58.00/unit and cost is $22.00/unit, yielding $36.00 gross margin per unit (62.07% gross margin). No requested discount amount was provided, so a discounted price cannot be evaluated against cost yet.</span></li><li><b>Customer Service</b><span>thinking_started: Agent analysis started; only concise operational events are logged, not hidden chain-of-thought. tool_call_started: Calling the approved local FastMCP tool; arguments are not copied to the audit log. tool_call_completed: FastMCP returned recorded shop data or a local board result. response_synthesis: Structured result prepared: Saved a local, unsent draft to Yale AI Club acknowledging the bulk hoodie request, asking for a target unit price or budget, and noting that only 8 of 20 size-M hoodies are on hand; restock of the remaining 12 is unconfirmed.</span></li></ul></section><section><h3>Approved disbursements</h3><div class="payment none">No disbursement</div></section><section class="chain"><h3>Delegation</h3><p>Boss → Inventory · Boss → Accounting · Boss → Customer Service</p></section><figure><img src="ticket_103.png" alt="Ticket 103 React dashboard snapshot" /><figcaption>React dashboard snapshot, rendered offline from the saved resolved-state data.</figcaption></figure></article></div></main><footer>Campus Customs · Local simulation · Drafts remain unsent; no real vendor or customer was contacted.</footer></body></html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta name="color-scheme" content="light">
+  <title>Campus Customs · Resolved board</title>
+  <style>
+    :root {
+      --navy: #102b53;
+      --blue: #185bb8;
+      --sky: #edf5ff;
+      --ice: #f6faff;
+      --ink: #1c2c41;
+      --muted: #61748b;
+      --line: #d9e5f3;
+      --green: #15634e;
+      --green-bg: #e9f7f1;
+      --red: #a3352b;
+      --shadow: 0 14px 40px rgba(22, 58, 104, .08);
+    }
+    * { box-sizing: border-box; }
+    body {
+      margin: 0;
+      background: linear-gradient(180deg, #eaf3ff 0, #f7faff 320px, #f7faff 100%);
+      color: var(--ink);
+      font: 15px/1.6 Inter, ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+    }
+    .shell { width: min(1240px, calc(100% - 36px)); margin: 0 auto; padding: 42px 0 64px; }
+    .eyebrow { margin: 0 0 8px; color: var(--blue); font-size: 12px; font-weight: 800; letter-spacing: .13em; text-transform: uppercase; }
+    h1 { margin: 0; color: var(--navy); font-size: clamp(30px, 5vw, 44px); letter-spacing: -.04em; line-height: 1.12; }
+    .intro { max-width: 760px; margin: 12px 0 20px; color: var(--muted); font-size: 16px; }
+    .metrics { display: flex; flex-wrap: wrap; gap: 10px; margin: 0 0 26px; }
+    .metric { min-width: 150px; padding: 10px 14px; border: 1px solid var(--line); border-radius: 12px; background: #fff; box-shadow: var(--shadow); }
+    .metric span { display: block; color: var(--blue); font-size: 11px; font-weight: 850; letter-spacing: .09em; text-transform: uppercase; }
+    .metric strong { color: var(--navy); font-size: 20px; font-variant-numeric: tabular-nums; }
+    .metric.end strong { color: var(--green); }
+    .card { margin: 0 0 24px; padding: 22px; border: 1px solid var(--line); border-radius: 16px; background: #fff; box-shadow: var(--shadow); }
+    .card-top { display: flex; align-items: flex-start; justify-content: space-between; gap: 14px; }
+    .card-top .eyebrow { margin-bottom: 4px; color: var(--muted); }
+    h2 { margin: 0; color: var(--navy); font-size: 24px; letter-spacing: -.025em; }
+    .resolved { white-space: nowrap; border: 1px solid #b7e4d2; border-radius: 999px; background: var(--green-bg); color: var(--green); font-size: 12px; font-weight: 850; letter-spacing: .06em; padding: 6px 11px; }
+    .outcome { margin: 10px 0 14px; font-size: 16px; }
+    .facts { display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 1fr); gap: 12px; margin: 0 0 16px; }
+    .fact-box { padding: 12px 14px; border: 1px solid #e6eef8; border-radius: 12px; background: var(--ice); }
+    .fact-box h3 { margin: 0 0 6px; color: var(--blue); font-size: 11px; font-weight: 850; letter-spacing: .09em; text-transform: uppercase; }
+    .fact-box ul { margin: 0; padding: 0; list-style: none; }
+    .fact-box li { margin: 4px 0; font-size: 14px; }
+    .fact-box .amt { float: right; color: var(--red); font-weight: 800; font-variant-numeric: tabular-nums; }
+    .fact-box small { display: block; color: var(--muted); font-size: 12.5px; }
+    .fact-box p { margin: 0; font-size: 14px; color: #52677f; }
+    figure { margin: 0; }
+    figure a { display: block; border: 1px solid var(--line); border-radius: 12px; overflow: hidden; }
+    figure a:focus-visible { outline: 3px solid #82b6f2; outline-offset: 2px; }
+    figure img { display: block; width: 100%; height: auto; }
+    figcaption { margin-top: 8px; color: var(--muted); font-size: 13px; }
+    .capture-note { margin: 0 0 24px; padding: 13px 16px; border: 1px solid var(--line); border-radius: 12px; background: #fff; color: #52677f; font-size: 14px; }
+    .capture-note code { font-size: 13px; }
+    .footer { margin-top: 10px; color: #8090a3; font-size: 12px; text-align: right; }
+    @media (max-width: 720px) {
+      .facts { grid-template-columns: 1fr; }
+      .card { padding: 16px; }
+    }
+  </style>
+</head>
+<body>
+  <main class="shell">
+    <header>
+      <p class="eyebrow">Campus Customs · final board run</p>
+      <h1>Resolved board</h1>
+      <p class="intro">Run on 2026-10-14 after a desk reset (shop desk date 2026-08-31). All three tickets ended RESOLVED and checking ended at $152.00. Below is the React board for each ticket right after the run.</p>
+      <div class="metrics">
+        <div class="metric"><span>Run date</span><strong>2026-10-14</strong></div>
+        <div class="metric"><span>Desk date</span><strong>2026-08-31</strong></div>
+        <div class="metric"><span>Starting checking</span><strong>$3,400.00</strong></div>
+        <div class="metric"><span>Approved and paid</span><strong>$3,248.00</strong></div>
+        <div class="metric end"><span>Ending checking</span><strong>$152.00</strong></div>
+        <div class="metric"><span>Agent tokens</span><strong>95,817</strong></div>
+      </div>
+    </header>
+
+    <p class="capture-note">The screenshots were taken from the live React board at <code>http://localhost:5173/?ticket=10X</code> right after the run, with <code>scripts/capture_board.py</code> (headless Edge, 1600 × 1300 window). The board shows local time (UTC+8). The agent stream scrolls inside its panel, so each picture shows the top of that ticket's stream; every step is in <code>output/audit_trail.json</code> and in the ticket tabs of <code>desk_tickets.html</code>. The "Approving as" box shows the default name because the capture browser starts with a fresh profile. The approvals themselves were made as Tongyu Chen, as the approved list shows. Click a screenshot to open it full size.</p>
+
+    <article class="card" id="ticket-101">
+      <div class="card-top"><div><p class="eyebrow">CC-101 · customer order · Tauhid Zaman</p><h2>Bulldog tee, size S</h2></div><span class="resolved">RESOLVED</span></div>
+      <p class="outcome">No size S was in stock, so I paid the overdue invoice that was blocking Bulldog Print Co and ordered one tee. It should arrive 2026-09-05, and an unsent draft tells Tauhid that.</p>
+      <div class="facts">
+        <div class="fact-box"><h3>Approvals</h3><ul>
+          <li><span class="amt">−$840.00</span>#1 invoice 501 to Bulldog Print Co<small>Tongyu Chen, 11:56:21 AM local</small></li>
+          <li><span class="amt">−$8.00</span>#2 purchase order 1: 1 × CC-TEE-WHITE S<small>Tongyu Chen, 11:56:22 AM local</small></li>
+        </ul></div>
+        <div class="fact-box"><h3>Runs</h3><p>Run 1 (Boss → Inventory → Accounting) stopped at waiting_approval. The resume run (Boss → Customer Service) saved draft 1 and resolved it. 43,233 tokens in total.</p></div>
+      </div>
+      <figure>
+        <a href="ticket_101.png" target="_blank" rel="noopener"><img src="ticket_101.png" alt="React board with ticket CC-101 selected after the final run"></a>
+        <figcaption>CC-101 selected. All three tickets show RESOLVED and the header pill reads $152.00. The stream starts at the 11:55:11 AM run divider, where Boss reads the ticket and hands it to Inventory. On the right: both approvals by Tongyu Chen (−$840.00 and −$8.00), Tauhid's draft marked DRAFT · NOT SENT, and the top of "Who did what."</figcaption>
+      </figure>
+    </article>
+
+    <article class="card" id="ticket-102">
+      <div class="card-top"><div><p class="eyebrow">CC-102 · rent notice · Elm City Properties</p><h2>Rent due</h2></div><span class="resolved">RESOLVED</span></div>
+      <p class="outcome">The $2,400 rent due 9/2 was paid after my approval, and lease 1 now shows the next due date as 2026-10-02. No customer draft was needed.</p>
+      <div class="facts">
+        <div class="fact-box"><h3>Approvals</h3><ul>
+          <li><span class="amt">−$2,400.00</span>#3 lease 1 rent to Elm City Properties<small>Tongyu Chen, 11:56:50 AM local</small></li>
+        </ul></div>
+        <div class="fact-box"><h3>Runs</h3><p>Run 1 (Boss → Facilities → Accounting) stopped at waiting_approval. In the resume run Boss closed it alone. 27,017 tokens in total.</p></div>
+      </div>
+      <figure>
+        <a href="ticket_102.png" target="_blank" rel="noopener"><img src="ticket_102.png" alt="React board with ticket CC-102 selected after the final run"></a>
+        <figcaption>CC-102 selected. The stream starts at 11:56:24 AM with Boss handing the ticket to Facilities; Inventory and Customer Service are greyed out in the agent row. On the right: the approved −$2,400.00 rent to Elm City Properties, "Who did what" for Boss, Accounting and Facilities, and the ticket outcome card marked RESOLVED.</figcaption>
+      </figure>
+    </article>
+
+    <article class="card" id="ticket-103">
+      <div class="card-top"><div><p class="eyebrow">CC-103 · price override · Yale AI Club</p><h2>Bulk hoodie discount</h2></div><span class="resolved">RESOLVED</span></div>
+      <p class="outcome">Offered 10% off: $52.20 each, $1,044 for 20, a 57.85% margin. Only 8 are in stock, so the draft asks whether the club wants a split delivery. No money moved.</p>
+      <div class="facts">
+        <div class="fact-box"><h3>Approvals</h3><p>None. Nothing was staged. A restock of the 12 missing hoodies would cost $264, more than the $152 left, and no one tried it.</p></div>
+        <div class="fact-box"><h3>Runs</h3><p>One run: Boss sent Inventory and Accounting at the same time, then Customer Service, and resolved it. 25,567 tokens.</p></div>
+      </div>
+      <figure>
+        <a href="ticket_103.png" target="_blank" rel="noopener"><img src="ticket_103.png" alt="React board with ticket CC-103 selected after the final run"></a>
+        <figcaption>CC-103 selected. The stream starts at 11:57:16 AM with Boss handing off to Inventory. "Human decisions" says Nothing waiting on you, the full draft to Yale AI Club is shown as DRAFT · NOT SENT, and "Who did what" lists Boss, Inventory and Accounting (Customer Service is below the bottom edge of the picture).</figcaption>
+      </figure>
+    </article>
+
+    <footer class="footer">Campus Customs · drafts are saved, never sent · every payment needed a human approval</footer>
+  </main>
+</body>
+</html>
