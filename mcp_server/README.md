@@ -11,13 +11,13 @@
 
 ## How it is started
 
-- **From `.mcp.json`** (Claude Code or another MCP client opened in the repo root):
+- From `.mcp.json`, when Claude Code or another MCP client is opened in the repo root:
   ```json
   {"mcpServers": {"campus_customs_mcp": {"command": "py", "args": ["-m", "mcp_server.server"], "env": {"PYTHONPATH": "."}}}}
   ```
   `py` is the Windows Python launcher. I used it because on my PC plain `python` points at the Microsoft Store stub. On macOS/Linux, change it to `python3`. `PYTHONPATH` is `.`, so the client has to start it from the repo root.
-- **By the backend.** For each ticket run, `backend/agent_team.py` starts `python -m mcp_server.server` as a stdio subprocess with the backend's own Python, opens a `ClientSession`, and checks that all 11 tools are there before any agent starts. The subprocess gets a minimal environment with no `PORTKEY_API_KEY`.
-- **By hand**, for testing: `py -m mcp_server.server` (Windows) or `python3 -m mcp_server.server`. It talks over stdin/stdout, opens no port, and prints nothing while it waits for a client.
+- By the backend: for each ticket run, `backend/agent_team.py` starts `python -m mcp_server.server` as a stdio subprocess with the backend's own Python, opens a `ClientSession`, and checks that all 11 tools are there before any agent starts. The subprocess gets a minimal environment with no `PORTKEY_API_KEY`.
+- By hand, for testing: `py -m mcp_server.server` (Windows) or `python3 -m mcp_server.server`. It talks over stdin/stdout, opens no port, and prints nothing while it waits for a client.
 
 When run with `-m`, `server.py` re-launches itself with `.venv`'s Python if that folder exists, so the launcher's own Python doesn't need the packages. Without a `.venv`, install `mcp_server/requirements.txt` (`mcp==1.30.0`, `pydantic`) into whatever Python starts it.
 
@@ -58,7 +58,7 @@ Four tools write, and all four stay inside the working database:
 - `propose_purchase_order`: one pending row in `approvals`
 - `save_customer_draft`: one row in `customer_drafts`
 
-No tool moves cash, marks an invoice paid, changes a lease, places an order or sends a message. `approvals`, `customer_drafts` and `purchase_orders` don't exist in the original database. The tools create them the first time they're needed. Money only moves in the backend route `POST /api/approvals/{approval_id}/approve`, after a person clicks Approve on the board. That route writes `payments`, `purchase_orders`, `invoices`, `leases` and `cash_accounts`, and refuses any amount larger than checking.
+No tool moves cash, marks an invoice paid, changes a lease, places an order or sends a message. `approvals`, `customer_drafts` and `purchase_orders` don't exist in the original database; the tools create them the first time they're needed. Money only moves in the backend route `POST /api/approvals/{approval_id}/approve`, after a person clicks Approve on the board. That route writes `payments`, `purchase_orders`, `invoices`, `leases` and `cash_accounts`, and refuses any amount larger than checking.
 
 The server itself doesn't check who is calling. The rule that only Accounting may call `propose_payment` and `propose_purchase_order` is enforced in `backend/agent_team.py`, which also caps each ticket at 40 MCP calls.
 
@@ -70,14 +70,15 @@ From the repo root:
 PYTHONPATH=. python -m unittest tests.test_mcp_server
 ```
 
-The tests check the tool list and parameters, bad inputs, the SQL-injection-style SKU case, the read-only connection, and that neither database file changes. Several read the working copy and expect the reset state, so `test_ticket_102_lease_is_due_in_two_shop_days` fails after a full run (the lease is then due 2026-10-02).
+The tests check the tool list and parameters, bad inputs, the SQL-injection-style SKU case, the read-only connection, and that neither database file changes. The checks that need the reset-state invoice and lease (invoice 501 holding vendor 1, rent due in 2 days) run on a temporary copy of `data/campus_customs.db`, so all of them also pass on the working copy after the final run.
 
 ## Running the backend
 
 The agents reach this server through the backend. From the repo root:
 
 ```bash
-cd backend && uvicorn main:app --reload --port 8000
+cd backend
+uvicorn main:app --reload --port 8000
 ```
 
-`POST /api/tickets/{ticket_id}/run` starts this server as a subprocess, runs the team, and closes it again when the run ends.
+`POST /api/tickets/{ticket_id}/run` starts this server as a subprocess, runs the team, and closes it when the run ends.

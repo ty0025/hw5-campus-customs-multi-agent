@@ -1,11 +1,11 @@
 # Homework 5: Campus Customs Multi-Agent Operations - AI Prompts Log
 
-I built Problems 1-11 with Codex in VS Code on Oct 8-9. Just after midnight on Oct 14 I had Codex check everything against the full assignment, which added a purchase-order approval and the board screenshots. Later on Oct 14 I used Claude Code to work out why the results looked wrong, rebuild the agent run, and do one clean final run on the board.
+I built Problems 1-11 with Codex in VS Code on Oct 8-9. Just after midnight on Oct 14 I had Codex check everything against the full assignment, and that check added a purchase-order approval and the board screenshots. Later on Oct 14 I used Claude Code to work out why the results looked wrong, rebuild the agent run, and do one clean final run on the board.
 
 Notes on this log:
 
 - Quotes are what I actually sent, copied from my saved Codex and Claude Code sessions. Chinese quotes have an English translation underneath.
-- For most problems my Codex message was a short line plus a longer English brief that I had paraphrased from the problem page. I quote the start of each brief and describe the rest instead of pasting it all. I also pasted assignment text as context a few times (the background section on Oct 8, the full assignment to Codex and to Claude Code on Oct 14), and I say so where it happened.
+- For most problems my Codex message was a short line plus a longer English brief that I had paraphrased from the problem page. I quote the start of each brief and describe the rest instead of pasting it all. I also pasted assignment text as context a few times (the background section on Oct 8, the full assignment to Codex and to Claude Code on Oct 14), and I say so each time.
 - When I gave Codex the full assignment on Oct 14 I told it the briefs were my paraphrases: "这是所有题目，需要你仔细阅读一下然后再理解一下为什么你有些地方和要求做的不一样，只需要阅读并理解，因为我给你的prompt都是我paraphrase过的" (Here are all the questions. Read them carefully and figure out why some of your work differs from the requirements. Just read and understand, because the prompts I gave you were all my paraphrases.)
 - Earlier versions of this file (commits 4a2d5c1 and f92bd94) mostly showed polished English prompts that I never typed. This version was rebuilt on Oct 14 from the saved sessions and replaces them.
 - Dates are local time (UTC+8).
@@ -25,7 +25,7 @@ After that line I pasted a brief asking Codex to create `AI_prompts.md` with one
 > Run a comprehensive grading audit across all 11 problems of Homework 5 and perform a complete English translation and human-tone polish of `AI_prompts.md`.
 
 ### What was missing after the first try
-The log held tidy template prompts instead of what I typed, and my follow-up made it worse because Codex "translated" my Chinese prompts into English prompts I never sent.
+The log held tidy template prompts instead of what I typed, and my follow-up made it worse: Codex "translated" my Chinese prompts into English ones I never sent.
 
 ## Problem 2: Study the Campus Customs database
 
@@ -48,7 +48,7 @@ Translation: This homework is in the hw5 folder and it's already unzipped. I wan
 I then pasted the assignment's background section and my Question 1 brief again.
 
 ### What was missing after the first try
-The first `harness.md` matched the database, but there was no script to re-run the check, and it didn't say that the hoodie vendor is only a guess from `vendors.specialty`, since no table links a SKU to a vendor.
+The first `harness.md` matched the database, but there was no script to re-run the check, and it didn't say that the hoodie vendor is only a guess from `vendors.specialty` (no table links a SKU to a vendor).
 
 ## Problem 3: Build the MCP server
 
@@ -64,7 +64,7 @@ Translation of the first line: Next, let's do Q3.
 The brief asked for a FastMCP server in `mcp_server/` on `data/campus_customs_new.db` with three tools, and it labeled the vendor-invoice tool "for Ticket 102 - Vendor Restock & Invoice Clearance".
 
 ### Follow-up (Codex, Oct 8)
-I had first sent the same brief in my first Codex session, where it failed:
+I had already sent the same brief in my first Codex session, where it failed:
 
 > 为啥会报错
 >
@@ -79,7 +79,7 @@ In the new session Codex asked how to label the tools, because in the database 1
 Translation: Label them by the real links in the database and note the numbering conflict in the question (recommended).
 
 ### What was missing after the first try
-My brief tied the vendor-invoice tool to ticket 102, but in the database 102 is rent and unpaid invoice 501 belongs to ticket 101, so the "conflict" came from my own paraphrase, not from the assignment.
+My brief tied the vendor-invoice tool to ticket 102, but in the database 102 is rent and unpaid invoice 501 belongs to ticket 101, so the "conflict" came from my own paraphrase, not the assignment.
 
 ## Problem 4: Add the MCP server to vibe coder and test each tool
 
@@ -88,7 +88,7 @@ My brief tied the vendor-invoice tool to ticket 102, but in the database 102 is 
 >
 > Execute the following steps programmatically and verify all outputs against the database:
 
-Then the `.mcp.json` to create (`campus_customs_mcp`, command `python`, args `-m mcp_server.server`, `PYTHONPATH=.`).
+The brief then gave the `.mcp.json` to create (`campus_customs_mcp`, command `python`, args `-m mcp_server.server`, `PYTHONPATH=.`).
 
 ### Follow-up (Claude Code, Oct 14)
 None with Codex. On Oct 14 Claude Code asked whether to connect the MCP server from Claude Code or Codex. My answer (part of a longer reply quoted in Problem 9):
@@ -97,7 +97,7 @@ None with Codex. On Oct 14 Claude Code asked whether to connect the MCP server f
 
 Translation: 3. Connect the MCP server from Claude Code or Codex for P4? Like you said, using Claude Code doesn't change anything, so use Claude.
 
-When it explained the steps for me to do by hand:
+When it listed steps for me to do by hand, I replied:
 
 > 这个我要干啥没看懂，你能直接新开一个对话帮我做了吗
 
@@ -130,7 +130,7 @@ Claude Code, Oct 14, before it changed anything:
 
 Translation: Before you start changing things, help me answer this. Is gpt6 luna the only model allowed this time, so I'd lose points if you use Claude Code? Or is there a way around that?
 
-Its answer was that the rule is about the model the agents call, which stays gpt-6-luna through Portkey, so using Claude Code as the vibe coder was fine. The diagnosis (Problem 9) then found that the agent prompts hard-coded what each ticket was, the audit trail kept no tool arguments or results, and the pricing tool couldn't take a quantity or a discount, so the team and tools were rebuilt.
+It answered that the rule covers the model the agents call, which stays gpt-6-luna through Portkey, so using Claude Code as the vibe coder was fine. The diagnosis (Problem 9) then found that the agent prompts hard-coded what each ticket was, the audit trail kept no tool arguments or results, and the pricing tool couldn't take a quantity or a discount, so the team and tools were rebuilt.
 
 ### What was missing after the first try
 The first pass stopped after `models.py` and the MCP tools, with no agent prompts, no delegation between agents and no audit logger.
@@ -205,7 +205,7 @@ Translation: If you've already found the gaps that would cost points, then fix t
 
 These led to the purchase-order approval and the three board screenshots (commit cc38a4d).
 
-Claude Code, Oct 14, followed by the full assignment text with my Chinese notes pasted in:
+Claude Code, Oct 14. After this message I pasted the full assignment with my Chinese notes:
 
 > 我需要你协助我检查一下这个作业做的怎么样，目前已经做完了，但是效果好像有点问题。你先帮我诊断，然后我们再看看怎么修改。我会把要求发你，我目前让codex协助我做的过程中遇到了一些问题：我会把作业要求也直接发给你：
 
@@ -219,7 +219,7 @@ Claude Code then asked me three questions (the numbered questions are its wordin
 
 Translation: 1. How much to fix? Fix all of it and rerun once, but don't burn too many tokens. Cut down on repeated testing; it just has to run cleanly. 2. Place a restock order for the one tee on 101? Yes. 3. Connect the MCP server from Claude Code or Codex for P4? Like you said, Claude Code doesn't change anything, so use Claude.
 
-In the final run on Oct 14 the desk was reset, each ticket was run from the board, and the three requests were approved on the board under my name ($840 for invoice 501, $8 for one size S tee, $2,400 rent). All three tickets ended resolved and checking went from $3,400.00 to $152.00.
+In the final run on Oct 14 the desk was reset, each ticket was run from the board, and the three requests were approved there under my name ($840 for invoice 501, $8 for one size S tee, $2,400 rent). All three tickets ended resolved and checking went from $3,400.00 to $152.00.
 
 ### What was missing after the first try
 The script approved the payments itself as "Human Approval" and forced all three tickets to resolved, so the board was never used, and the audit trail kept no tool arguments or results.
@@ -249,7 +249,7 @@ Claude Code, Oct 14, after the final run:
 Translation: Just write the reflection for me and I'll review it.
 
 ### What was missing after the first try
-The reflection template in my first brief had the business types of tickets 102 and 103 swapped and described the scripted Oct 9 run, so after the Oct 14 rerun it had to be written again from the real run data.
+The reflection template in my first brief had the business types of tickets 102 and 103 swapped and described the scripted Oct 9 run, so after the Oct 14 rerun it had to be rewritten from the real run data.
 
 ## Problem 11: Submit to GitHub
 

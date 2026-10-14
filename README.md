@@ -72,14 +72,15 @@ py -m mcp_server.server
 python3 -m mcp_server.server
 ```
 
-It is a stdio server, so it opens no port and prints nothing. It just waits for an MCP client. Stop it with Ctrl+C. When started this way it re-launches itself with `.venv`'s Python if that folder exists. On macOS/Linux, change `"command": "py"` in `.mcp.json` to `"python3"`. More detail is in `mcp_server/README.md`.
+It is a stdio server: it opens no port, prints nothing and waits for an MCP client. Stop it with Ctrl+C. When started this way it re-launches itself with `.venv`'s Python if that folder exists. On macOS/Linux, change `"command": "py"` in `.mcp.json` to `"python3"`. More detail is in `mcp_server/README.md`.
 
 ## Start the backend
 
 In a terminal with the venv active:
 
 ```bash
-cd backend && uvicorn main:app --reload --port 8000
+cd backend
+uvicorn main:app --reload --port 8000
 ```
 
 The API is at `http://localhost:8000` and only allows the board's origin (`http://localhost:5173`) through CORS.
@@ -105,7 +106,7 @@ npm install
 npm run dev
 ```
 
-Open `http://localhost:5173`. Adding `?ticket=102` to the URL opens a specific ticket.
+Open `http://localhost:5173`. Adding `?ticket=102` to the URL opens that ticket.
 
 ## A full three-ticket run
 
@@ -132,7 +133,7 @@ PYTHONPATH=. python -m unittest discover tests
 $env:PYTHONPATH = "."; python -m unittest discover tests
 ```
 
-`tests/test_approval_flow.py` walks the money path for all three tickets on a temporary copy of the original database, including the refusal when checking is too low. `tests/test_mcp_server.py` checks the tools and makes sure neither database file changes. A few MCP tests read the working copy and expect the reset state. On a freshly reset copy all 17 tests pass. On the working copy as submitted (after the final run), `test_ticket_102_lease_is_due_in_two_shop_days` fails, because approving the rent moved the lease's next due date to 2026-10-02. Resetting clears the final-run data, so run that check on a spare clone if you want to keep it.
+`tests/test_approval_flow.py` walks the money path for all three tickets on a temporary copy of the original database, including the refusal when checking is too low. `tests/test_mcp_server.py` checks the tools and that neither database file changes. The MCP tests that need the reset-state invoice and rent (vendor 1 held by invoice 501, rent due in 2 days, the structured tool calls) run on a temporary copy of `data/campus_customs.db`. The other tests only read stock and vendors, which the final run did not change. So all 17 tests pass on a fresh reset and on the working copy as submitted, and the suite never writes to either database file.
 
 ## Helper scripts
 

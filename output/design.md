@@ -20,17 +20,17 @@ Each agent has one color and one set of initials, and they are the same everywhe
 
 The human approver is purple and labelled "You". Approvals sit in the same stream as the agent steps, in a purple bubble, for example "Tongyu Chen approved payment #1 for $840.00: invoice 501 marked paid. Checking $3,400.00 -> $2,560.00." Nothing else on the page is purple, so the moments when a person moved money are easy to find. System is grey and faded, and it only marks when a run started.
 
-There are two bubble styles. A solid speech bubble with a chat icon is a report: what an agent found and handed back, with its findings listed underneath. Boss's closing line for each run uses it too. A dashed, italic thought bubble is a task. When an agent delegates, the row says "Handed to Accounting" and shows the task and the context it passed along. The receiving agent's "picked up the task" row shows the same task. That way I can tell what someone was asked to do apart from what they actually found.
+There are two bubble styles. A solid speech bubble with a chat icon is a report: what an agent found and handed back, with its findings listed underneath. Boss's closing line for each run uses it too. A dashed, italic thought bubble is a task. When an agent delegates, the row says "Handed to Accounting" and shows the task and the context it passed along. The receiving agent's "picked up the task" row shows the same task. That way I can tell what an agent was asked to do from what it actually found.
 
 Every MCP call is a small chip with the tool name and its arguments, like `check_inventory_stock {"sku":"CC-TEE-WHITE","size":"S","order_quantity":1}`. Under the chip, "MCP result" opens the JSON the tool returned. During a live run the call in progress shows as "calling tool". Once it returns, only the finished call and its result stay in the feed, so each call appears once. Each row also has a short action label ("delegated", "picked up the task", "used tool", "reported back", "closed the run", "approved") and a time.
 
-A divider line reading "Run started" plus the time separates runs on the same ticket. Ticket 101 took two runs. The first staged the $840 payment and the $8 order. Then my two approvals appear in purple, then the resume run where Customer Service wrote the draft and Boss closed the ticket. Without the dividers these would blur together. While a run is going, the feed asks `/api/events` for new steps every second and the badge in the corner switches from READY to LIVE.
+A divider line reading "Run started" plus the time separates runs on the same ticket. Ticket 101 took two runs. The first staged the $840 payment and the $8 order. Next come my two approvals in purple, then the resume run in which Customer Service wrote the draft and Boss closed the ticket. Without the dividers these would run together. While a run is going, the feed asks `/api/events` for new steps every second and the badge in the corner switches from READY to LIVE.
 
-The point is that the manager doesn't have to take a summary on trust. If Boss says size S is out, I can open the result of Inventory's `check_inventory_stock` call and see `"on_hand": 0`. The colors tell me who is talking and the bubble style tells me whether it's a request or a finding. In my final run this also exposed waste I would not have caught from a summary. On ticket 102, Accounting called `get_lease_due_status` again even though Facilities had just passed it the lease facts.
+The manager doesn't have to take a summary on trust. If Boss says size S is out, I can open the result of Inventory's `check_inventory_stock` call and see `"on_hand": 0`. The colors tell me who is talking and the bubble style tells me whether it's a request or a finding. In my final run this also showed me waste I would have missed in a summary: on ticket 102, Accounting called `get_lease_due_status` again even though Facilities had just passed it the lease facts.
 
 ## How resolved tickets show up
 
-The status badge comes straight from `tickets.status`, which Boss sets with `update_ticket_status`. OPEN is orange, NEEDS APPROVAL (the `waiting_approval` state) is yellow, and RESOLVED is green. The other states the tool allows also have badges (IN PROGRESS, WAITING ON CUSTOMER, BLOCKED, STAFF REVIEW), but none came up in the final run. The board never marks a ticket resolved just because a run finished. It only turns green once Boss has written "resolved" to the database.
+The status badge comes straight from `tickets.status`, which Boss sets with `update_ticket_status`. OPEN is orange, NEEDS APPROVAL (the `waiting_approval` state) is yellow, and RESOLVED is green. The other states the tool allows also have badges (IN PROGRESS, WAITING ON CUSTOMER, BLOCKED, STAFF REVIEW), but none came up in the final run. A finished run does not make a ticket green. It turns green only after Boss has written "resolved" to the database.
 
 At the bottom of "Who did what" is a Ticket outcome line with Boss's latest resolution note, the same badge, and a green check once the ticket is resolved. Above it, each agent that worked the ticket is listed with its last report, the tools it used and how many steps it took.
 
@@ -42,7 +42,7 @@ The Run button changes with the ticket:
 - "Run again" after it is resolved
 - "Agents at work" during a run
 
-Tickets 101 and 102 can't be finished in one pass because the team has to stop and wait for me. The button tells me the next move. Disabling it while money is pending stops me from re-running a ticket whose requests haven't been decided yet.
+Tickets 101 and 102 can't be finished in one pass because the team has to stop and wait for me, so the button tells me the next move. Disabling it while money is pending keeps me from re-running a ticket whose requests are still undecided.
 
 ## How cash shows up
 
@@ -55,11 +55,11 @@ Each staged request gets an approval card with:
 - Accounting's reason, and the reference ("invoice 501", "lease 1", or "1 x CC-TEE-WHITE S, 5-day lead")
 - "Checking after approval", which is the current balance minus this amount
 
-Two warnings can appear on a card. "Waits for invoice 501: approve that payment first." shows on an order while the payment for that vendor's invoice is still pending. "Checking can't cover this. The approve route will refuse it." shows when the amount is more than the balance. The backend enforces both rules anyway. The warnings just tell me before I click.
+Two warnings can appear on a card. "Waits for invoice 501: approve that payment first." shows on an order while the payment for that vendor's invoice is still pending. "Checking can't cover this. The approve route will refuse it." shows when the amount is more than the balance. The backend enforces both rules anyway; the warnings just tell me before I click.
 
 Above the cards is an "Approving as" field. The name typed there is remembered by the browser and saved in `payments.approved_by`. Once approved, a request moves to an "Approved on this ticket" list with the payee, who approved it, the reference and the amount as a negative number (−$840.00). A green banner also says what changed, for example "Approved $840.00 · invoice 501 marked paid. Checking is now $2,560.00."
 
-I wanted the manager to see the effect of a click before making it. On the $2,400 rent card, "Checking after approval" read $152.00. That is the number I want in front of me before paying rent, because it means the shop will have almost nothing left for the hoodie restock on ticket 103.
+I wanted the manager to see the effect of a click before making it. On the $2,400 rent card, "Checking after approval" read $152.00. I want that number in front of me before paying rent, because it means the shop will have almost nothing left for the hoodie restock on ticket 103.
 
 ## Customer drafts
 
@@ -70,7 +70,7 @@ When Customer Service saves a draft, a "Customer drafts" card appears on the rig
 - It runs on the shop's date. The top bar says 2026-08-31 even though I ran it in October, and every "overdue" and "due in 2 days" in the stream uses that date.
 - It has a place. The header says "Chapel Street", which is the shop on lease 1.
 - Approvals are signed. The three payments in the final run say "Tongyu Chen" in the ledger, not "admin".
-- Talk and money are kept apart. Agents talk in the middle column and money waits on the right until I act. The page is navy, white and pale blue, while the approval cards are tinted warm amber, so anything waiting on my money stands out. The footer repeats the rule: "Drafts stay local · Every payment needs a human."
+- Talk and money are kept apart. Agents talk in the middle column and money waits on the right until I act. The page is navy, white and pale blue, while the approval cards are tinted warm amber, so anything waiting on my money is easy to spot. The footer repeats the rule: "Drafts stay local · Every payment needs a human."
 - Reset desk asks for confirmation before it wipes the working copy, and the stream starts empty afterwards, like clearing the desk at the start of a day.
 - Empty spots say what to do next: "The desk is waiting" with a "Run this ticket" link in the feed, and "Nothing waiting on you" under Human decisions.
 - There are no charts or summary tables. With three tickets, the decisions themselves are the dashboard.

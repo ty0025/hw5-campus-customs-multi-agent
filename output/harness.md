@@ -2,11 +2,11 @@
 
 This file describes what my Homework 5 build is made of and how it behaved in the final run. It covers the shop database (Problem 2), the MCP tools (Problems 3 to 5), the agent team (Problem 5), the safety rules, the API routes (Problem 7), the dashboard (Problem 8) and the final run (Problem 9).
 
-The short version: 9 tables in the original database plus 3 the app adds, 11 MCP tools, 5 agents, 8 API routes and one React board. Every agent runs on `gpt-6-luna` through Portkey.
+In short: 9 tables in the original database plus 3 the app adds, 11 MCP tools, 5 agents, 8 API routes and one React board. Every agent runs on `gpt-6-luna` through Portkey.
 
 ## Problem 2: Database tables
 
-I generated this section with `python study_database.py` from the project root. The script copies `data/campus_customs.db` to `data/campus_customs_new.db` and then reads the working copy through a read-only sqlite3 connection. Table names come from `sqlite_master` and the field names and types come from `PRAGMA table_info`. Row counts are from the original file, before any run.
+I first generated this section with `python study_database.py` from the project root, then rewrote the Why lines and added the runtime-table notes by hand. The script copies `data/campus_customs.db` to `data/campus_customs_new.db` and then reads the working copy through a read-only sqlite3 connection. Table names come from `sqlite_master` and the field names and types come from `PRAGMA table_info`. Row counts are from the original file, before any run.
 
 ### `cash_accounts` (1 row)
 
@@ -116,7 +116,7 @@ The original file is never written. During a run the working copy changes like t
 
 ### Open-ticket findings (original database, at Problem 2 time)
 
-`desk.date_today` is `2026-08-31`; all overdue calculations below use this shop date, and the database contains 3 open tickets.
+`desk.date_today` is `2026-08-31`, and every overdue count below uses that shop date. The database has 3 open tickets.
 
 #### Table linkages
 
@@ -128,9 +128,9 @@ Declared foreign keys from `PRAGMA foreign_key_list`:
 
 Other operational links:
 
-- `(tickets.sku, tickets.size)` matches `(inventory.sku, inventory.size)`, and `tickets.sku` matches `pricing.sku`; these matches are not declared foreign keys.
+- `(tickets.sku, tickets.size)` matches `(inventory.sku, inventory.size)`, and `tickets.sku` matches `pricing.sku`. Neither is a declared foreign key.
 - `desk.date_today` supplies the date for invoices, leases and ticket handling.
-- `payments.account` can match `cash_accounts.name`, and `payments.kind` plus `payments.ref_id` identify the paid obligation. These links are not declared foreign keys, and the payment ledger starts empty.
+- `payments.account` can match `cash_accounts.name`, and `payments.kind` plus `payments.ref_id` identify the paid obligation. Neither link is a declared foreign key, and the payment ledger starts empty.
 - No table maps SKUs to vendors, so a vendor picked from product category and `vendors.specialty` is a candidate, not a confirmed supplier.
 
 #### Ticket 101: Bulldog tee
@@ -155,15 +155,15 @@ Other operational links:
 - Stock: `CC-HOOD-NAVY` size `M` is Basic Hoodie Big Yale; 8 on hand at Aisle A for a requested 20, a shortfall of 12.
 - Pricing: unit cost $22.00, list price $58.00, gross profit $36.00 per unit at list (62.07% margin).
 - Discount: the request does not name a discount or target price, so the discounted margin is open until someone picks one.
-- Candidate vendor: Bulldog Print Co (apparel reprint, 5-day lead) is the likely supplier by category; ticket 103 has no invoice or direct vendor link.
+- Candidate vendor: Bulldog Print Co (apparel reprint, 5-day lead) is the likely supplier by category. Ticket 103 has no invoice or direct vendor link.
 - Vendor hold: at this point invoice 501 ($840.00) also blocks any hoodie restock from that vendor.
 
 #### Cash and operating constraints
 
 - `checking` balance: $3,400.00 as of `2026-08-31`.
-- The payment ledger has 0 rows; the inspection makes no payments or ticket changes.
-- Any payment needs human approval and enough cash; cash only goes out and the balance can't go negative.
-- Customer messages and vendor requests stay as drafts on the board; no email or vendor call is made.
+- The payment ledger has 0 rows. The inspection makes no payments or ticket changes.
+- Every payment needs human approval and enough cash. Cash only goes out, and the balance can't go negative.
+- Customer messages and vendor requests stay as drafts on the board. No email is sent and no vendor is called.
 - Reset the working database from the original before every full ticket run.
 
 ### Inspection check (at Problem 2 time)
@@ -204,7 +204,7 @@ The server is `mcp_server/server.py` (FastMCP). Problem 3 asked for three tools 
 }
 ```
 
-`py` is the Windows Python launcher. On my PC, `python` points at the Microsoft Store stub, so I used `py`. On macOS or Linux, change the command to `python3`. When `server.py` runs as a module it looks for the project's `.venv` and, if it exists, re-launches itself with that interpreter, so the MCP packages are found whichever Python started it. Because of `PYTHONPATH=.`, the client has to be opened in the `hw5` folder.
+`py` is the Windows Python launcher. On my PC, `python` points at the Microsoft Store stub, so I used `py`. On macOS or Linux, change the command to `python3`. When `server.py` runs as a module, it looks for the project's `.venv` and, if it finds one, re-launches itself with that interpreter. That way the MCP packages load no matter which Python started it. Because of `PYTHONPATH=.`, the client has to be opened in the `hw5` folder.
 
 I tested the tools from a Claude Code session opened in the project folder, which loaded `.mcp.json` and called the `campus_customs_mcp` tools. The record of that check is in `output/mcp_smoke.json`. I ran it after the final run, so it shows the post-run state: no unpaid invoice at Bulldog Print Co, and lease 1 next due 2026-10-02 (32 days out) with payment 3 recorded.
 
@@ -219,7 +219,7 @@ The backend does not use `.mcp.json`. For each ticket run, `backend/agent_team.p
 Every agent has the same two tools:
 
 - `call_shop_mcp_tool(tool_name, arguments)` calls one MCP tool through a stdio `ClientSession`. The name has to be on the allowlist of the 11 server tools.
-- `delegate_to_agent(target_agent, task, context)` hands a task to any other agent and waits for its answer. An agent can't delegate to itself, so the team is fully connected.
+- `delegate_to_agent(target_agent, task, context)` hands a task to any other agent (never itself) and waits for its answer, so the team is fully connected.
 
 | Agent | Prompt file | Job | Usually hands work to |
 | --- | --- | --- | --- |
@@ -260,7 +260,7 @@ Seven tools only read. They open the database with `mode=ro` and `PRAGMA query_o
 - `message`: the delegated task with its context, an agent's report, or an error (up to 4,000 characters)
 - `findings`, `model`, `usage` (requests and tokens), `depth`
 
-The file is append-only. Each write reads the array, adds one record, writes a temp file and swaps it in, so nothing is edited or deleted. Records from the Oct 8 version were JSON Lines with a `reasoning_notes` field; they were converted into the array without loss, and the reader still accepts both formats. `GET /api/events` and `scripts/export_run_evidence.py` only look at records after the last `database_reset`, so older runs stay in the file without showing up on the current board.
+The file is append-only. Each write reads the array, adds one record, writes a temp file and swaps it in, so nothing is edited or deleted. Records from the Oct 8 version were JSON Lines with a `reasoning_notes` field. They were converted into the array without loss, and the reader still accepts both formats. `GET /api/events` and `scripts/export_run_evidence.py` only look at records after the last `database_reset`, so older runs stay in the file without showing up on the current board.
 
 ## Safety
 
@@ -272,13 +272,13 @@ I set these up the way I would want them in a real shop. The agents can read any
 - Only Accounting can stage money. `call_shop_mcp_tool` refuses `propose_payment` and `propose_purchase_order` from any other agent and logs the attempt as an error, so Inventory, Facilities and Boss have to delegate to Accounting.
 - Proposals are checked against the records. `propose_payment` needs an `invoice:<id>` or `lease:<id>` reference, and the amount has to match the invoice or rent exactly. Both proposal tools hold back cash already promised to other pending requests and refuse a new request that doesn't fit. `propose_purchase_order` only accepts the exact shortfall and an apparel vendor (for a ticket with an invoice, that invoice's vendor). It refuses a blocked vendor unless the blocking invoice already has a pending payment request.
 - The approve route refuses overdrafts and blocked orders. It returns 400 if the amount is more than what's in checking, so the balance can't go negative. It returns 409 for a purchase order while the vendor still has an open invoice, and 409 for a request that was already decided. Each approval is one transaction, so a refusal changes nothing. `tests/test_approval_flow.py` covers both refusals and the full cash path on a temporary copy of the database, with no AI calls.
-- Cash only goes out. No tool or route adds money.
+- Cash only goes out. No tool or route adds money. After the final run I also wrote the no-negative-cash rule into `accounting.md` and `boss.md` in plain words. That changes nothing at runtime, since the tools and the approve route already enforce it.
 - Drafts are never sent. There is no email, SMS or vendor API anywhere in the code. `save_customer_draft` stores the message as `draft` and returns `sent=false`, and the board labels each one "DRAFT · NOT SENT".
-- No invented facts. Agents reach shop data only through MCP; the agent code has no SQL. Every prompt says to use only numbers from a tool or a teammate's report and to quote an arrival date only as desk date + `lead_days`.
+- No invented facts. Agents reach shop data only through MCP. The agent code has no SQL. Every prompt says to use only numbers from a tool or a teammate's report and to quote an arrival date only as desk date + `lead_days`.
 - Tools are allowlisted. Only the 11 server tools can be called; any other name is rejected and logged.
 - The MCP subprocess gets no API key. `_child_environment` passes only `PATH`, `SYSTEMROOT`, `WINDIR`, `TEMP`, `TMP`, `LANG`, `LC_ALL`, `PYTHONPATH` and `PYTHONIOENCODING`.
 - The model is locked. `backend/app/settings.py` hard-codes `gpt-6-luna` and the Portkey URL, and `AgentTeam` refuses to start if either one changes or the key is missing.
-- Status belongs to Boss. The code drops `ticket_status` from every non-Boss answer. `update_ticket_status` itself is not locked to Boss in code; the other prompts tell agents to leave status alone, and in the final run only Boss called it.
+- Status belongs to Boss. The code drops `ticket_status` from every non-Boss answer. `update_ticket_status` itself is not locked to Boss in code. The other prompts tell agents to leave status alone, and in the final run only Boss called it.
 - Clean runs. `POST /api/database/reset` copies the original file over the working copy and logs the starting balance. The original is never opened for writing.
 
 ### Token and loop limits
@@ -301,7 +301,7 @@ Delegated tasks are cut to 1,200 characters and their context to 5,000, and an a
 
 From the `usage` field of each `ticket_run_completed` record: five ticket runs used 13 agent turns, 46 model requests, 45 MCP calls and 95,817 tokens. The biggest single agent turn was Boss on ticket 103 at 13,857 tokens over 5 requests, under a quarter of the 60,000 cap. The busiest ticket run was the first run of 101 (3 agent turns, 14 MCP calls, 28,227 tokens). Delegation never went deeper than 2, and no limit was hit.
 
-Some of those calls were repeats. The runner reads the ticket before and after each run and logs those reads under Boss, so `get_ticket_details` shows up 7 times on 101 and 7 times on 102 (4 from the runner and 3 from Boss each time). Accounting also re-ran `check_inventory_stock` on 101 and `get_lease_due_status` on 102, even though the agent that delegated to it had already passed those facts.
+Some of those calls were repeats. The runner reads the ticket before and after each run and logs those reads under Boss, so `get_ticket_details` is logged under Boss 7 times on 101 and 7 times on 102 (4 from the runner and 3 from Boss each time); on 101, Inventory, Accounting and Customer Service each read it once more, for 10 in total. Accounting also re-ran `check_inventory_stock` on 101 and `get_lease_due_status` on 102, even though the agent that delegated to it had already passed those facts.
 
 ## Problem 7: API routes
 
@@ -344,7 +344,7 @@ The final run was on Oct 14, 2026. Times below are UTC; the board showed local t
 
 End state: checking is $152.00 in `cash_accounts`, matching 3,400 → 2,560 → 2,552 → 152. The `payments` ledger has three rows, all dated 2026-08-31 and approved by Tongyu Chen: invoice 501 ($840), purchase order 1 ($8) and lease 1 ($2,400). All three tickets are resolved. The run logged no errors, and every audit record that names a model says `gpt-6-luna`. Total agent tokens: 95,817.
 
-One gap against my plan: the revised Expected plan for 103 said Accounting would try the 12-hoodie order ($264) and the tool would refuse it because only $152 was left. In the actual run Boss told Inventory and Accounting not to stage anything, so nobody tried, and that refusal never happened on the board. `tests/test_approval_flow.py` covers it: after the same three approvals, `propose_purchase_order` for 12 hoodies is refused.
+One gap against my plan: the revised Expected plan for 103 said Accounting would try the 12-hoodie order ($264) and the tool would refuse it because only $152 was left. In the actual run Boss told Inventory and Accounting not to stage anything, so nobody tried and the refusal never showed up on the board. `tests/test_approval_flow.py` covers it: after the same three approvals, `propose_purchase_order` for 12 hoodies is refused.
 
 Evidence files:
 
@@ -354,4 +354,4 @@ Evidence files:
 
 ### Earlier runs still in the audit trail
 
-The audit trail is append-only, so it still holds runs from before the final one. Early on Oct 9 local time (Oct 8, 19:05 to 19:13 UTC), the first version (built with Codex) ran the tickets from a script, `scripts/resolve_all.py`, which has since been deleted. The team stopped at `waiting_approval` or `waiting_customer`; the script then approved the two payments in-process as "Human Approval" (logged as `HumanApproval`) and forced all three tickets to resolved. The board was never used for that run, and those records have no tool arguments or results. On Oct 14, after the rebuild, I ran ticket 101 three times as a sanity check (resets at 03:29, 03:31 and 03:33 UTC). The first two stopped with an error because the code called `result.usage()`, but in pydantic-ai 2.x `usage` is a property; one of them had also run on the old process before uvicorn reloaded. The third worked, I clicked its approvals as "Sanity test", and the resume run closed the ticket. Then I reset the desk at 03:54 for the final run above. The board and the export script only read records after the last reset, so none of these older runs mix into the final evidence.
+The audit trail is append-only, so it still holds runs from before the final one. Early on Oct 9 local time (Oct 8, 19:05 to 19:13 UTC), the first version (built with Codex) ran the tickets from a script, `scripts/resolve_all.py`, which has since been deleted. The team stopped at `waiting_approval` or `waiting_customer`. The script then approved the two payments in-process as "Human Approval" (logged as `HumanApproval`) and forced all three tickets to resolved. The board was never used for that run, and those records have no tool arguments or results. On Oct 14, after the rebuild, I ran ticket 101 three times as a sanity check (resets at 03:29, 03:31 and 03:33 UTC). The first two stopped with an error because the code called `result.usage()`, but in pydantic-ai 2.x `usage` is a property. One of them had also run on the old process before uvicorn reloaded. The third worked, I clicked its approvals as "Sanity test", and the resume run closed the ticket. Then I reset the desk at 03:54 for the final run above. The board and the export script only read records after the last reset, so none of these older runs mix into the final evidence.

@@ -30,6 +30,7 @@ Keep the resolution note short and factual: the decision, the key numbers, and a
 
 ## Hard rules
 - Agents never move money. Only a human clicking Approve on the board pays anything.
+- Cash only goes out and checking can never go negative. If the money is not there, the request waits; plan around it.
 - Nothing is sent. Customer messages are drafts on the board. Nobody emails a customer or calls a vendor.
 - Never invent a fact. Every number you use must come from an MCP tool result or a teammate's report.
 - Don't loop. If a delegation fails or comes back blocked, use what you have and set an honest status.
