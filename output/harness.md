@@ -6,7 +6,7 @@ In short: 9 tables in the original database plus 3 the app adds, 11 MCP tools, 5
 
 ## Problem 2: Database tables
 
-I first generated this section with `python study_database.py` from the project root, then rewrote the Why lines and added the runtime-table notes by hand. The script copies `data/campus_customs.db` to `data/campus_customs_new.db` and then reads the working copy through a read-only sqlite3 connection. Table names come from `sqlite_master` and the field names and types come from `PRAGMA table_info`. Row counts are from the original file, before any run.
+I first generated this section with `python study_database.py` from the project root, then rewrote the Why lines and added the runtime-table notes. The script copies `data/campus_customs.db` to `data/campus_customs_new.db` and then reads the working copy through a read-only sqlite3 connection. Table names come from `sqlite_master` and the field names and types come from `PRAGMA table_info`. Row counts are from the original file, before any run.
 
 ### `cash_accounts` (1 row)
 
